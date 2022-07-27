@@ -1,0 +1,17 @@
+[package]
+name = "bin-prot-rs"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+derive-new = "0.5.9"
+derive_more = "0.99.17"
+proc-macro2 = "1.0.40"
+quote = "1.0.20"
+rsexp = { path = "../rsexp" }
+rsexp-derive = { path = "../rsexp/rsexp-derive" }
+rust-format = { version = "0.3.4", features = ["token_stream"] }
+syn = "1.0.98"
+thiserror = "1.0.31"
