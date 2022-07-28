@@ -36,17 +36,17 @@ impl<'a> Generator<'a> {
     }
 
     pub fn generate(&'a mut self, name: &str) -> TokenStream {
-        let ty = if let Some(ty) = self.xref.for_name(name) {
+        let group = if let Some(ty) = self.xref.for_name(name) {
             ty
         } else {
             gen_bail!("name `{name}` not found");
         };
 
-        let main = self.generate_expression(name, ty);
+        //let main = self.generate_expression(name, group);
         let defs = self.defs.iter();
 
         quote! {
-            #main
+            //#main
             #(
                 #defs
             )*

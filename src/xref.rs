@@ -1,4 +1,4 @@
-use crate::shape::*;
+use crate::{shape::*, visit::{Visitor, Visiting}};
 use std::{collections::HashMap, ops::Deref};
 
 pub trait NamedShape {
@@ -25,8 +25,8 @@ pub enum Error {
 }
 
 pub struct XRef<'a> {
-    gid_map: HashMap<i32, (&'a Expression, Option<&'a str>)>,
-    name_map: HashMap<&'a str, &'a Expression>,
+    gid_map: HashMap<i32, (&'a Group, Option<&'a str>)>,
+    name_map: HashMap<&'a str, &'a Group>,
 }
 
 impl<'a> XRef<'a> {
@@ -39,9 +39,10 @@ impl<'a> XRef<'a> {
         let mut name_map = HashMap::new();
         let mut gid_name = HashMap::new();
         for ty in types {
-            if let Expression::Top_app(Group { gid, .. }, ..) = ty.shape() {
-                name_map.insert(ty.name(), ty.shape());
-                gid_name.insert(*gid, ty.name());
+            if let Expression::Top_app(group, ..) = ty.shape() {
+                name_map.insert(ty.name(), group);
+                gid_name.insert(group.gid, ty.name());
+                gid_map.insert(group.gid, (group, Some(ty.name())));
             } else {
                 return Err(Error::IncorrectExpression(format!(
                     "Wrong type for {name}",
@@ -52,7 +53,7 @@ impl<'a> XRef<'a> {
 
         struct GidVisitor<'a, 'b: 'a> {
             gid_name: HashMap<Gid, &'b str>,
-            gid_map: &'a mut HashMap<Gid, (&'b Expression, Option<&'b str>)>,
+            gid_map: &'a mut HashMap<Gid, (&'b Group, Option<&'b str>)>,
         }
 
         impl<'a, 'b> Visitor<'b> for GidVisitor<'a, 'b> {
@@ -62,7 +63,7 @@ impl<'a> XRef<'a> {
                         return;
                     }
                     let name = self.gid_name.get(&group.gid).map(|n| *n);
-                    self.gid_map.insert(group.gid, (expr, name));
+                    self.gid_map.insert(group.gid, (group, name));
                 }
                 expr.visit(self)
             }
@@ -73,20 +74,30 @@ impl<'a> XRef<'a> {
             gid_map: &mut gid_map,
         };
 
-        name_map.values().for_each(|expr| visitor.apply(expr));
+        name_map.iter().for_each(|(_name, group)| {
+            group.visit(&mut visitor)
+        });
 
         let result = Self { gid_map, name_map };
         Ok(result)
     }
 
     /// Returns top expression (`[Expression::Top_app]`) registered for the provided `name`.
-    pub fn for_name(&'a self, name: &str) -> Option<&'a Expression> {
+    pub fn for_name(&self, name: &str) -> Option<&Group> {
         self.name_map.get(name).map(Deref::deref)
     }
 
     /// Returns a pair of `[Expression]` and optional name for the specified `gid`.
-    pub fn for_gid(&self, gid: Gid) -> Option<(&'a Expression, Option<&'a str>)> {
+    pub fn for_gid(&self, gid: Gid) -> Option<(&Group, Option<&str>)> {
         self.gid_map.get(&gid).map(|t| *t)
+    }
+
+    pub fn names(&self) -> impl Iterator<Item = &str> {
+        self.name_map.keys().map(Deref::deref)
+    }
+
+    pub fn named(&self) -> impl Iterator<Item = (&str, &Group)> {
+        self.name_map.iter().map(|(n, t)| (*n, *t))
     }
 }
 
@@ -149,6 +160,18 @@ mod tests {
         let xref = XRef::new(&exprs).unwrap();
         assert!(xref.for_name("my_type").is_some());
         assert!(xref.for_name("other_type").is_none());
+    }
+
+    #[test]
+    fn gid_name() {
+        let gid = 0;
+        let exprs = vec![(
+            "my_type",
+            wrap(Expression::new_base("base_type".to_string(), vec![]), gid),
+        )];
+        let xref = XRef::new(&exprs).unwrap();
+        let named = xref.named().next().unwrap();
+        assert!(matches!(named.1, Group { .. }));
     }
 
 }

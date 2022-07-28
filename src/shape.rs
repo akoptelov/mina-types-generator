@@ -11,41 +11,7 @@ pub type Tid = String;
 pub type Vid = String;
 pub type Uuid = String;
 
-
-pub trait Visitor<'a> {
-    /// Apply this visitor to the specified expression `expr`.
-    ///
-    /// By default just visit all sub-expressions with the visitor.
-    fn apply(&mut self, expr: &'a Expression);
-}
-
-impl<'a, T> Visitor<'a> for T
-where
-    T: FnMut(&'a Expression),
-{
-    fn apply(&mut self, expr: &'a Expression) {
-        self(expr)
-    }
-}
-
-#[derive(Debug, Clone, OfSexp, SexpOf)]
-pub struct Group {
-    pub gid: Gid,
-    pub loc: Location,
-    pub members: Vec<(Tid, (Vec<Vid>, Expression))>,
-}
-
-impl Group {
-    fn visit<'a, T>(&'a self, visitor: &mut T)
-    where
-        T: Visitor<'a>,
-    {
-        let app = |expr| visitor.apply(expr);
-        self.members.iter().map(|(_, (_, expr))| expr).for_each(app);
-    }
-}
-
-#[derive(Debug, Clone, OfSexp, SexpOf, new)]
+#[derive(Debug, Clone, PartialEq, Eq,  OfSexp, SexpOf, new)]
 pub enum Expression {
     Annotate(Uuid, Box<Expression>),
     Base(Uuid, Vec<Expression>),
@@ -65,106 +31,17 @@ pub enum Expression {
     Top_app(Group, Tid, Vec<Expression>),
 }
 
-pub trait Selector {
-    #![allow(unused)]
-    fn annotate(&self, uuid: &Uuid, expr: &Expression) {}
-    fn base(&self, uuid: &Uuid, exprs: &Vec<Expression>) {}
-    fn record(&self, fields: &Vec<(String, Expression)>) {}
-    fn variant(&self, alts: &Vec<(String, Vec<Expression>)>) {}
-    fn tuple(&self, elems: &Vec<Expression>) {}
-    fn poly_variant(&self, loc: &Location, constrs: &Vec<PolyConstr>) {}
-    fn var(&self, loc: &Location, vid: &Vid) {}
-    fn rec_app(&self, tid: &Tid, args: &Vec<Expression>) {}
-    fn top_app(&self, group: &Group, tid: &Tid, args: &Vec<Expression>) {}
+#[derive(Debug, Clone, PartialEq, Eq, OfSexp, SexpOf)]
+pub struct Group {
+    pub gid: Gid,
+    pub loc: Location,
+    pub members: Vec<(Tid, (Vec<Vid>, Expression))>,
 }
 
-pub trait MutSelector {
-    #![allow(unused)]
-    fn annotate(&mut self, uuid: &Uuid, expr: &Expression) {}
-    fn base(&mut self, uuid: &Uuid, exprs: &Vec<Expression>) {}
-    fn record(&mut self, fields: &Vec<(String, Expression)>) {}
-    fn variant(&mut self, alts: &Vec<(String, Vec<Expression>)>) {}
-    fn tuple(&mut self, elems: &Vec<Expression>) {}
-    fn poly_variant(&mut self, loc: &Location, constrs: &Vec<PolyConstr>) {}
-    fn var(&mut self, loc: &Location, vid: &Vid) {}
-    fn rec_app(&mut self, tid: &Tid, args: &Vec<Expression>) {}
-    fn top_app(&mut self, group: &Group, tid: &Tid, args: &Vec<Expression>) {}
-}
-
-impl Expression {
-    pub fn visit<'a, T>(&'a self, visitor: &mut T)
-    where
-        T: Visitor<'a>,
-    {
-        let mut app = |expr| visitor.apply(expr);
-        match self {
-            Expression::Annotate(_, expr) => app(expr),
-            Expression::Base(_, exprs) => exprs.iter().for_each(app),
-            Expression::Record(fields) => fields.iter().map(|(_, expr)| expr).for_each(app),
-            Expression::Variant(alternatives) => alternatives
-                .iter()
-                .map(|(_, expr)| expr.iter())
-                .flatten()
-                .for_each(app),
-            Expression::Tuple(exprs) => exprs.iter().for_each(app),
-            Expression::Poly_variant((_, constrs)) => {
-                constrs.iter().for_each(|constr| constr.visit(visitor))
-            }
-            Expression::Var(_) => (),
-            Expression::Rec_app(_, exprs) => exprs.iter().for_each(app),
-            Expression::Top_app(group, _, exprs) => {
-                exprs.iter().for_each(app);
-                group.visit(visitor);
-            },
-        }
-    }
-
-    pub fn select<T>(&self, selector: &T) where T: Selector {
-        match self {
-            Expression::Annotate(uuid, expr) => selector.annotate(uuid, expr),
-            Expression::Base(uuid, exprs) => selector.base(uuid, exprs),
-            Expression::Record(fields) => selector.record(fields),
-            Expression::Variant(alts) => selector.variant(alts),
-            Expression::Tuple(elems) => selector.tuple(elems),
-            Expression::Poly_variant((loc, constrs)) => selector.poly_variant(loc, constrs),
-            Expression::Var((loc, vid)) => selector.var(loc, vid),
-            Expression::Rec_app(tid, args) => selector.rec_app(tid, args),
-            Expression::Top_app(group, tid, args) => selector.top_app(group, tid, args),
-        }
-    }
-
-    pub fn select_mut<T>(&self, selector: &mut T) where T: MutSelector {
-        match self {
-            Expression::Annotate(uuid, expr) => selector.annotate(uuid, expr),
-            Expression::Base(uuid, exprs) => selector.base(uuid, exprs),
-            Expression::Record(fields) => selector.record(fields),
-            Expression::Variant(alts) => selector.variant(alts),
-            Expression::Tuple(elems) => selector.tuple(elems),
-            Expression::Poly_variant((loc, constrs)) => selector.poly_variant(loc, constrs),
-            Expression::Var((loc, vid)) => selector.var(loc, vid),
-            Expression::Rec_app(tid, args) => selector.rec_app(tid, args),
-            Expression::Top_app(group, tid, args) => selector.top_app(group, tid, args),
-        }
-    }
-}
-
-#[derive(Debug, Clone, OfSexp, SexpOf)]
+#[derive(Debug, Clone, PartialEq, Eq, OfSexp, SexpOf)]
 pub enum PolyConstr {
     Constr((String, Option<Box<Expression>>)),
     Inherit((Location, Box<Expression>)),
-}
-
-impl PolyConstr {
-    fn visit<'a, T>(&'a self, visitor: &mut T)
-    where
-        T: Visitor<'a>,
-    {
-        let mut app = |expr| visitor.apply(expr);
-        match self {
-            PolyConstr::Constr((_, expr)) => expr.iter().map(|b| b.as_ref()).for_each(app),
-            PolyConstr::Inherit((_, expr)) => app(expr),
-        }
-    }
 }
 
 #[derive(Debug, Error)]
