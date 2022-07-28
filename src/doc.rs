@@ -151,9 +151,38 @@ where
     }
 }
 
+#[derive(Debug)]
+enum ExpressionType {
+    Named(String),
+    External(String),
+    Unknown,
+}
+
+impl ExpressionType {
+    fn type_to_type_and_anchor(s: &str, anchor_prefix: &str) -> String {
+        let mut anchor = String::new();
+        for ch in s.chars() {
+            if ch == '_' || ch.is_numeric() {
+                anchor.push(ch);
+            } else if ch.is_alphabetic() {
+                anchor.push(ch.to_ascii_lowercase());
+            }
+        }
+        format!("[{s}](#{anchor_prefix}{anchor})")
+    }
+
+    fn as_md_reference(&self, anchor_prefix: &str, expr: &Expression) -> String {
+        match self {
+            ExpressionType::Named(s) => Self::type_to_type_and_anchor(s, anchor_prefix),
+            ExpressionType::External(s) => s.clone(),
+            ExpressionType::Unknown => format!("<cannot resolve type: {expr:?}>"),
+        }
+    }
+}
+
 trait ReferenceResolver {
     fn resolve_group_name(&self, gid: Gid) -> String;
-    fn resolve_exression_type(&self, expr: &Expression) -> Option<String>;
+    fn resolve_exression_type(&self, expr: &Expression) -> ExpressionType;
 }
 
 impl<'a> ReferenceResolver for XRef<'a> {
@@ -163,22 +192,22 @@ impl<'a> ReferenceResolver for XRef<'a> {
             .map_or_else(|| format!("anonimous-{gid}"), String::from)
     }
 
-    fn resolve_exression_type(&self, expr: &Expression) -> Option<String> {
+    fn resolve_exression_type(&self, expr: &Expression) -> ExpressionType {
         expr.select_with_value(self)
     }
 }
 
-impl<'a> ValueSelector<Option<String>> for XRef<'a> {
-    fn default_result(&self) -> Option<String> {
-        None
+impl<'a> ValueSelector<ExpressionType> for XRef<'a> {
+    fn default_result(&self) -> ExpressionType {
+        ExpressionType::Unknown
     }
 
-    fn base(&self, uuid: &crate::shape::Uuid, _exprs: &Vec<Expression>) -> Option<String> {
-        Some(uuid.to_string())
+    fn base(&self, uuid: &crate::shape::Uuid, _exprs: &Vec<Expression>) -> ExpressionType {
+        ExpressionType::External(uuid.to_string())
     }
 
-    fn var(&self, _loc: &crate::shape::Location, vid: &Vid) -> Option<String> {
-        Some(vid.to_string())
+    fn var(&self, _loc: &crate::shape::Location, vid: &Vid) -> ExpressionType {
+        ExpressionType::External(vid.to_string())
     }
 
     fn top_app(
@@ -186,8 +215,8 @@ impl<'a> ValueSelector<Option<String>> for XRef<'a> {
         group: &Group,
         _tid: &crate::shape::Tid,
         _args: &Vec<Expression>,
-    ) -> Option<String> {
-        Some(self.resolve_group_name(group.gid))
+    ) -> ExpressionType {
+        ExpressionType::Named(self.resolve_group_name(group.gid))
     }
 }
 
@@ -236,14 +265,10 @@ where
         args: &Vec<Expression>,
     ) -> Result<()> {
         let base = self.xref.resolve_group_name(group.gid);
-        self.print_kind(format!("Instance of [{base}](base)"))?;
+        let base = ExpressionType::type_to_type_and_anchor(&base, "type-");
+        self.print_kind(format!("Instance of {base}"))?;
         if !args.is_empty() {
-            writeln!(
-                self.out,
-                r#"
-**Type Arguments:**
-"#
-            )?;
+            writeln!(self.out, r#"**Type Arguments:**"#)?;
             let vids = &group_first_expr(group)?.1 .0;
             if args.len() != vids.len() {
                 return Err(Error::MismatchTypeParametersLenght(
@@ -253,10 +278,10 @@ where
                 ));
             }
             for (arg, param) in args.iter().zip(vids.iter()) {
-                let arg = self.xref.resolve_exression_type(arg).map_or_else(
-                    || format!("<no name for {arg:?}>"),
-                    |a| format!("[{a}]({a})"),
-                );
+                let arg = self
+                    .xref
+                    .resolve_exression_type(arg)
+                    .as_md_reference("type-", arg);
                 writeln!(self.out, "- `{arg}` as `{param}`")?;
             }
         }
@@ -269,7 +294,7 @@ where
             let ty = self
                 .xref
                 .resolve_exression_type(ty)
-                .unwrap_or_else(|| cannot_resolve_type(ty));
+                .as_md_reference("type-", ty);
             writeln!(self.out, "- `{name}` of type `{ty}`")?
         }
         Ok(())
@@ -283,7 +308,7 @@ where
                 let ty = self
                     .xref
                     .resolve_exression_type(expr)
-                    .unwrap_or_else(|| cannot_resolve_type(expr));
+                    .as_md_reference("type-", expr);
                 writeln!(self.out, "  - `{ty}`")?;
             }
         }
@@ -296,7 +321,7 @@ where
             let ty = self
                 .xref
                 .resolve_exression_type(ty)
-                .unwrap_or_else(|| cannot_resolve_type(ty));
+                .as_md_reference("type-", ty);
             writeln!(self.out, "- `{ty}`")?
         }
         Ok(())
@@ -313,10 +338,6 @@ fn loc_to_git(loc: &str) -> Option<String> {
     let file = split.next()?;
     let line = split.next()?;
     Some(format!("{file}#L{line}"))
-}
-
-fn cannot_resolve_type(expr: &Expression) -> String {
-    format!("<cannot resolve type {expr:?}>")
 }
 
 #[cfg(test)]

@@ -1,3 +1,5 @@
+use thiserror::Error;
+
 use crate::{shape::*, visit::{Visitor, Visiting}};
 use std::{collections::HashMap, ops::Deref};
 
@@ -19,8 +21,9 @@ where
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum Error {
+    #[error("Incorrect root expression: {0}")]
     IncorrectExpression(String),
 }
 
