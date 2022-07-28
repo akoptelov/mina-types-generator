@@ -88,7 +88,7 @@ where
         let name = self.xref.resolve_group_name(group.gid);
         writeln!(
             self.out,
-            "\n\n### Type {name}\n[{loc}]({base}{git_loc})\n",
+            "\n\n### Type `{name}`\n[{loc}]({base}{git_loc})\n",
             loc = group.loc,
             base = self.git_base,
             git_loc = loc_to_git(&group.loc).unwrap_or_else(|| group.loc.clone()),
@@ -146,6 +146,7 @@ where
 #[derive(Debug)]
 enum ExpressionType {
     Named(String),
+    Parameter(String),
     External(String),
     Unknown,
 }
@@ -166,7 +167,8 @@ impl ExpressionType {
     fn as_md_reference(&self, anchor_prefix: &str, expr: &Expression) -> String {
         match self {
             ExpressionType::Named(s) => Self::type_to_type_and_anchor(s, anchor_prefix),
-            ExpressionType::External(s) => format!("`{s}`"),
+            ExpressionType::Parameter(s) => format!("parameter `{s}`"),
+            ExpressionType::External(s) => format!("external type `{s}`"),
             ExpressionType::Unknown => format!("<cannot resolve type: {expr:?}>"),
         }
     }
@@ -199,7 +201,7 @@ impl<'a> ValueSelector<ExpressionType> for XRef<'a> {
     }
 
     fn var(&self, _loc: &crate::shape::Location, vid: &Vid) -> ExpressionType {
-        ExpressionType::External(vid.to_string())
+        ExpressionType::Parameter(vid.to_string())
     }
 
     fn top_app(
@@ -281,7 +283,7 @@ where
                 .xref
                 .resolve_exression_type(ty)
                 .as_md_reference("type-", ty);
-            writeln!(self.out, "- {name} of type `{ty}`")?
+            writeln!(self.out, "- `{name}`: {ty}")?
         }
         Ok(())
     }
