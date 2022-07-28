@@ -88,11 +88,7 @@ where
         let name = self.xref.resolve_group_name(group.gid);
         writeln!(
             self.out,
-            r#"
-### Type {name}
-[{loc}]({base}{git_loc})
-
-"#,
+            "\n\n### Type {name}\n[{loc}]({base}{git_loc})\n",
             loc = group.loc,
             base = self.git_base,
             git_loc = loc_to_git(&group.loc).unwrap_or_else(|| group.loc.clone()),
@@ -103,12 +99,7 @@ where
 
     fn print_type_parameters(&mut self, vids: &Vec<Vid>) -> Result {
         if !vids.is_empty() {
-            writeln!(
-                self.out,
-                r#"
-**Type parameters**:
-"#,
-            )?;
+            writeln!(self.out, "\n**Type parameters**:",)?;
             vids.iter()
                 .map(|vid| Ok(writeln!(self.out, "- `{vid}`")?))
                 .collect::<Result<()>>()?;
@@ -135,7 +126,7 @@ where
     F: Fn(Result<()>, Result<()>) -> Result<()>,
 {
     fn apply(&mut self, expr: &'a Expression, f: &F) -> Result<()> {
-        if let Expression::Top_app(group, ..) = expr {
+        if let Expression::Top_app(group, _, exprs) = expr {
             if self.all && self.named_group(group.gid) {
                 return Ok(());
             }
@@ -143,6 +134,7 @@ where
                 return Ok(());
             }
             self.generate_group(group)?;
+            exprs.iter().try_for_each(|expr| self.apply(expr, f))?;
         } else {
             expr.visit_mut_with_value(self, f).unwrap_or(Ok(()))?;
         }
@@ -174,7 +166,7 @@ impl ExpressionType {
     fn as_md_reference(&self, anchor_prefix: &str, expr: &Expression) -> String {
         match self {
             ExpressionType::Named(s) => Self::type_to_type_and_anchor(s, anchor_prefix),
-            ExpressionType::External(s) => s.clone(),
+            ExpressionType::External(s) => format!("`{s}`"),
             ExpressionType::Unknown => format!("<cannot resolve type: {expr:?}>"),
         }
     }
@@ -236,13 +228,7 @@ where
     }
 
     fn print_kind(&mut self, kind: String) -> Result {
-        writeln!(
-            self.out,
-            r#"
-**Kind:** {kind}
-
-"#
-        )?;
+        writeln!(self.out, "\n**Kind:** {kind}")?;
         Ok(())
     }
 }
@@ -282,7 +268,7 @@ where
                     .xref
                     .resolve_exression_type(arg)
                     .as_md_reference("type-", arg);
-                writeln!(self.out, "- `{arg}` as `{param}`")?;
+                writeln!(self.out, "- {arg} as `{param}`")?;
             }
         }
         Ok(())
@@ -295,7 +281,7 @@ where
                 .xref
                 .resolve_exression_type(ty)
                 .as_md_reference("type-", ty);
-            writeln!(self.out, "- `{name}` of type `{ty}`")?
+            writeln!(self.out, "- {name} of type `{ty}`")?
         }
         Ok(())
     }
@@ -309,7 +295,7 @@ where
                     .xref
                     .resolve_exression_type(expr)
                     .as_md_reference("type-", expr);
-                writeln!(self.out, "  - `{ty}`")?;
+                writeln!(self.out, "  - {ty}")?;
             }
         }
         Ok(())
@@ -322,7 +308,7 @@ where
                 .xref
                 .resolve_exression_type(ty)
                 .as_md_reference("type-", ty);
-            writeln!(self.out, "- `{ty}`")?
+            writeln!(self.out, "- {ty}")?
         }
         Ok(())
     }
