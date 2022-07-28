@@ -3,10 +3,7 @@ use std::{collections::HashSet, io::Write};
 use thiserror::Error;
 
 use crate::{
-    select::{
-        SelectingMutWithValue, SelectingWithValue, ValueMutSelector,
-        ValueSelector,
-    },
+    select::{SelectingMutWithValue, SelectingWithValue, ValueMutSelector, ValueSelector},
     shape::{Expression, Gid, Group, Tid, Vid},
     visit::{ValueMutVisiting, ValueMutVisitor},
     xref::XRef,
@@ -22,6 +19,8 @@ pub enum Error {
     EmptyGroup(Gid),
     #[error("Different lenght of type parameters `{1}` and arguments `{2}` for group `{0}`")]
     MismatchTypeParametersLenght(Gid, usize, usize),
+    #[error("Type `{0}` not found")]
+    TypeNotFound(String),
 }
 
 pub struct Doc<'a, O>
@@ -31,6 +30,7 @@ where
     xref: &'a XRef<'a>,
     out: &'a mut O,
     git_base: String,
+    all: bool,
     done: HashSet<Gid>,
 }
 
@@ -49,15 +49,24 @@ where
             xref,
             git_base,
             out,
+            all: false,
             done: HashSet::new(),
         }
     }
 
-    pub fn generate(&'a mut self) -> Result<()> {
+    pub fn generate(&'a mut self, name: &str) -> Result {
+        let group = self
+            .xref
+            .for_name(name)
+            .ok_or_else(|| Error::TypeNotFound(name.to_string()))?;
+        self.generate_group(group)
+    }
+
+    pub fn generate_all(&'a mut self) -> Result<()> {
+        self.all = true;
         self.xref
             .named()
-            .try_for_each(|(_name, group)| self.generate_group(group))?;
-        Ok(())
+            .try_for_each(|(_name, group)| self.generate_group(group))
     }
 
     /// Generates group's member(s)
@@ -112,6 +121,12 @@ where
         ExpressionDoc::generate(expr, self.xref, self.out)?;
         Ok(())
     }
+
+    fn named_group(&self, gid: Gid) -> bool {
+        self.xref
+            .for_gid(gid)
+            .map_or(false, |(_, name)| name.is_some())
+    }
 }
 
 impl<'a, O, F> ValueMutVisitor<'a, Result<()>, F> for Doc<'a, O>
@@ -121,6 +136,9 @@ where
 {
     fn apply(&mut self, expr: &'a Expression, f: &F) -> Result<()> {
         if let Expression::Top_app(group, ..) = expr {
+            if self.all && self.named_group(group.gid) {
+                return Ok(());
+            }
             if !self.done.insert(group.gid) {
                 return Ok(());
             }
@@ -332,7 +350,7 @@ mod tests {
         let git_base =
             "https://github.com/MinaProtocol/mina/blob/b14f0da9ebae87acd8764388ab4681ca10f07c89/";
         let mut doc = Doc::new(&xref, git_base.to_string(), &mut out);
-        doc.generate().unwrap();
+        doc.generate_all().unwrap();
         println!("{}", String::from_utf8(out).unwrap());
     }
 }
