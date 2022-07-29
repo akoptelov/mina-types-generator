@@ -155,7 +155,7 @@ impl ExpressionType {
     fn type_to_type_and_anchor(s: &str, anchor_prefix: &str) -> String {
         let mut anchor = String::new();
         for ch in s.chars() {
-            if ch == '_' || ch.is_numeric() {
+            if ch == '_' || ch == '-' || ch.is_numeric() {
                 anchor.push(ch);
             } else if ch.is_alphabetic() {
                 anchor.push(ch.to_ascii_lowercase());
@@ -183,7 +183,7 @@ impl<'a> ReferenceResolver for XRef<'a> {
     fn resolve_group_name(&self, gid: Gid) -> String {
         self.for_gid(gid)
             .and_then(|(_, name)| name)
-            .map_or_else(|| format!("anonimous-{gid}"), String::from)
+            .map_or_else(|| format!("anonymous-{gid}"), String::from)
     }
 
     fn resolve_exression_type(&self, expr: &Expression) -> ExpressionType {
@@ -312,6 +312,11 @@ where
                 .as_md_reference("type-", ty);
             writeln!(self.out, "- {ty}")?
         }
+        Ok(())
+    }
+
+    fn base(&mut self, uuid: &crate::shape::Uuid, _exprs: &Vec<Expression>) -> Result<()> {
+        self.print_kind(format!("Alias of type `{uuid}`"))?;
         Ok(())
     }
 
