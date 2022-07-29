@@ -261,17 +261,16 @@ impl ValueMutSelector<Result<Expression, CanonicalizeError>> for Canonicalize {
     fn var(&mut self, _loc: &Location, vid: &Vid) -> Result<Expression, CanonicalizeError> {
         self.venv
             .get(vid)
-            //.map(Deref::deref)
             .cloned()
             .ok_or_else(|| CanonicalizeError::UnknownVar(vid.clone()))
     }
 
     fn rec_app(
         &mut self,
-        _tid: &Tid,
+        tid: &Tid,
         _args: &Vec<Expression>,
     ) -> Result<Expression, CanonicalizeError> {
-        self.default_result()
+        Ok(Expression::Rec_app(tid.clone(), vec![]))
     }
 
     fn top_app(
