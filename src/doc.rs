@@ -112,24 +112,6 @@ where
         ExpressionDoc::generate(expr, self.xref, self.out)?;
         Ok(())
     }
-
-    fn named_group(&self, gid: Gid) -> bool {
-        self.xref
-            .for_gid(gid)
-            .map_or(false, |(_, name)| name.is_some())
-    }
-
-    fn unnamed_group_for_external_type(&self, group: &Group) -> Result<bool> {
-        Ok(matches!(
-            group
-                .members
-                .first()
-                .ok_or_else(|| Error::EmptyGroup(group.gid))?
-                .1
-                 .1,
-            Expression::Base(_, _)
-        ) && self.xref.for_gid(group.gid).is_none())
-    }
 }
 
 impl<'a, O, F> ValueMutVisitor<'a, Result<()>, F> for Doc<'a, O>
@@ -139,10 +121,11 @@ where
 {
     fn apply(&mut self, expr: &'a Expression, f: &F) -> Result<()> {
         if let Expression::Top_app(group, _, exprs) = expr {
-            if self.all && self.named_group(group.gid) {
+            if self.all && !self.xref.is_anonymous(group.gid) {
+                // All named types will be doc'ed on the top level.
                 return Ok(());
             }
-            if self.unnamed_group_for_external_type(&group)? {
+            if self.xref.can_inline_group(&group) {
                 return Ok(());
             }
             if !self.done.insert(group.gid) {
@@ -164,7 +147,7 @@ enum ExpressionType {
     Parameter(String),
     External(String, Vec<ExpressionType>),
     Tuple(Vec<ExpressionType>),
-    Anonimous(Gid),
+    Anonymous(Gid),
     Unknown(Expression),
 }
 
@@ -200,7 +183,7 @@ impl ExpressionType {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            ExpressionType::Anonimous(gid) => format!("anonymous-{gid}"),
+            ExpressionType::Anonymous(gid) => format!("anonymous-{gid}"),
             ExpressionType::Unknown(expr) => format!("<cannot resolve type: {expr:?}>"),
         }
     }
@@ -210,6 +193,29 @@ trait ReferenceResolver {
     fn get_group_name(&self, gid: Gid) -> String;
     fn resolve_group_name(&self, gid: Gid) -> ExpressionType;
     fn resolve_exression_type(&self, expr: &Expression) -> ExpressionType;
+}
+
+impl<'a> XRef<'a> {
+    fn can_inline_expression(&self, expr: &Expression) -> bool {
+        match expr {
+            Expression::Base(_, _) => true,
+            Expression::Tuple(_) => true,
+            Expression::Top_app(group, _, _) => self.can_inline_group(group),
+            _ => false,
+        }
+    }
+
+    fn is_anonymous(&self, gid: Gid) -> bool {
+        self.for_gid(gid).map_or(true, |(_, name)| name.is_none())
+    }
+
+    fn can_inline_group(&self, group: &Group) -> bool {
+        self.is_anonymous(group.gid)
+            && group
+                .members
+                .first()
+                .map_or(false, |m| self.can_inline_expression(&m.1 .1))
+    }
 }
 
 impl<'a> ReferenceResolver for XRef<'a> {
@@ -225,16 +231,16 @@ impl<'a> ReferenceResolver for XRef<'a> {
                 name.map(String::from)
                     .map(ExpressionType::Named)
                     .or_else(|| {
-                        group.members.first().and_then(|(_, (_, expr))| {
-                            if let Expression::Base(uuid, exprs) = expr {
-                                self.base(uuid, exprs)
+                        group.members.first().and_then(|m| {
+                            if self.can_inline_expression(&m.1 .1) {
+                                Some(self.resolve_exression_type(&m.1 .1))
                             } else {
                                 None
                             }
                         })
                     })
             })
-            .unwrap_or_else(|| ExpressionType::Anonimous(gid))
+            .unwrap_or_else(|| ExpressionType::Anonymous(gid))
     }
 
     fn resolve_exression_type(&self, expr: &Expression) -> ExpressionType {
@@ -383,18 +389,15 @@ where
     }
 
     fn base(&mut self, uuid: &crate::shape::Uuid, exprs: &Vec<Expression>) -> Result<()> {
-        let type_expr = ExpressionType::External(
+        let base = ExpressionType::External(
             uuid.clone(),
             exprs
                 .iter()
                 .map(|expr| self.xref.resolve_exression_type(expr))
                 .collect(),
-        );
-        writeln!(
-            self.out,
-            "Alias of `{}`",
-            type_expr.as_md_reference("type-")
-        )?;
+        )
+        .as_md_reference("type-");
+        writeln!(self.out, "Alias of {base}")?;
         Ok(())
     }
 
