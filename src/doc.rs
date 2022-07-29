@@ -162,7 +162,7 @@ where
 enum ExpressionType {
     Named(String),
     Parameter(String),
-    External(String),
+    External(String, Vec<ExpressionType>),
     Tuple(Vec<ExpressionType>),
     Anonimous(Gid),
     Unknown(Expression),
@@ -185,7 +185,14 @@ impl ExpressionType {
         match self {
             ExpressionType::Named(s) => Self::type_to_type_and_anchor(s, anchor_prefix),
             ExpressionType::Parameter(s) => format!("parameter `{s}`"),
-            ExpressionType::External(s) => format!("external type `{s}`"),
+            ExpressionType::External(s, args) if !args.is_empty() => format!(
+                "external type `{s}` of ({})",
+                args.iter()
+                    .map(|arg| arg.as_md_reference(anchor_prefix))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            ExpressionType::External(s, _) => format!("external type `{s}`"),
             ExpressionType::Tuple(list) => format!(
                 "({})",
                 list.iter()
@@ -241,8 +248,14 @@ impl<'a> ValueSelector<Option<ExpressionType>> for XRef<'a> {
         None
     }
 
-    fn base(&self, uuid: &crate::shape::Uuid, _exprs: &Vec<Expression>) -> Option<ExpressionType> {
-        Some(ExpressionType::External(uuid.to_string()))
+    fn base(&self, uuid: &crate::shape::Uuid, exprs: &Vec<Expression>) -> Option<ExpressionType> {
+        Some(ExpressionType::External(
+            uuid.to_string(),
+            exprs
+                .iter()
+                .map(|expr| self.resolve_exression_type(expr))
+                .collect(),
+        ))
     }
 
     fn tuple(&self, elems: &Vec<Expression>) -> Option<ExpressionType> {
@@ -369,8 +382,19 @@ where
         Ok(())
     }
 
-    fn base(&mut self, uuid: &crate::shape::Uuid, _exprs: &Vec<Expression>) -> Result<()> {
-        self.print_kind(format!("Alias of type `{uuid}`"))?;
+    fn base(&mut self, uuid: &crate::shape::Uuid, exprs: &Vec<Expression>) -> Result<()> {
+        let type_expr = ExpressionType::External(
+            uuid.clone(),
+            exprs
+                .iter()
+                .map(|expr| self.xref.resolve_exression_type(expr))
+                .collect(),
+        );
+        writeln!(
+            self.out,
+            "Alias of `{}`",
+            type_expr.as_md_reference("type-")
+        )?;
         Ok(())
     }
 
