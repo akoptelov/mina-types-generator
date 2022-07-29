@@ -335,7 +335,7 @@ fn loc_to_git(loc: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use crate::xref::XRef;
+    use crate::{xref::XRef, shape::eval};
 
     use super::Doc;
 
@@ -358,6 +358,7 @@ mod tests {
  t ())"#;
 
         let expr = sexp.parse().unwrap();
+        let expr = eval(&expr).unwrap();
         let exprs = vec![("my_type", expr)];
         let xref = XRef::new(&exprs).unwrap();
         let mut out = Vec::new();
