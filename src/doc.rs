@@ -1,4 +1,4 @@
-use std::{collections::HashSet, io::Write};
+use std::{collections::{HashSet, HashMap}, io::Write};
 
 use thiserror::Error;
 
@@ -23,11 +23,16 @@ pub enum Error {
     TypeNotFound(String),
 }
 
+type Venv = HashMap<Vid, Expression>;
+type Tenv = HashMap<Tid, Expression>;
+
 pub struct Doc<'a, O>
 where
     O: Write,
 {
     xref: &'a XRef<'a>,
+    venv: Venv,
+    tenv: Tenv,
     out: &'a mut O,
     git_base: String,
     all: bool,
@@ -47,6 +52,8 @@ where
     pub fn new(xref: &'a XRef<'a>, git_base: String, out: &'a mut O) -> Self {
         Self {
             xref,
+            venv: HashMap::new(),
+            tenv: HashMap::new(),
             git_base,
             out,
             all: false,
@@ -193,29 +200,6 @@ trait ReferenceResolver {
     fn get_group_name(&self, gid: Gid) -> String;
     fn resolve_group_name(&self, gid: Gid) -> ExpressionType;
     fn resolve_exression_type(&self, expr: &Expression) -> ExpressionType;
-}
-
-impl<'a> XRef<'a> {
-    fn can_inline_expression(&self, expr: &Expression) -> bool {
-        match expr {
-            Expression::Base(_, _) => true,
-            Expression::Tuple(_) => true,
-            Expression::Top_app(group, _, _) => self.can_inline_group(group),
-            _ => false,
-        }
-    }
-
-    fn is_anonymous(&self, gid: Gid) -> bool {
-        self.for_gid(gid).map_or(true, |(_, name)| name.is_none())
-    }
-
-    fn can_inline_group(&self, group: &Group) -> bool {
-        self.is_anonymous(group.gid)
-            && group
-                .members
-                .first()
-                .map_or(false, |m| self.can_inline_expression(&m.1 .1))
-    }
 }
 
 impl<'a> ReferenceResolver for XRef<'a> {
@@ -416,7 +400,10 @@ fn loc_to_git(loc: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{shape::eval, xref::XRef};
+    use crate::{
+        shape::eval,
+        xref::XRef,
+    };
 
     use super::Doc;
 
@@ -448,5 +435,30 @@ mod tests {
         let mut doc = Doc::new(&xref, git_base.to_string(), &mut out);
         doc.generate_all().unwrap();
         println!("{}", String::from_utf8(out).unwrap());
+    }
+
+    #[test]
+    fn gen_rec_app() {
+        // let foo = Expression::Var((String::new(), "foo_t".to_string()));
+        // let bar = Expression::Var((String::new(), "bar_t".to_string()));
+        // let rec = Expression::Record(vec![("foo".to_string(), foo), ("bar".to_string(), bar)]);
+        // let group = Group {
+        //     gid: 1,
+        //     loc: String::new(),
+        //     members: vec![(
+        //         "t".to_string(),
+        //         (vec!["foo_t".to_string(), "bar_t".to_string()], rec),
+        //     )],
+        // };
+
+        // let expr = eval(&expr).unwrap();
+        // let exprs = vec![("my_type", expr)];
+        // let xref = XRef::new(&exprs).unwrap();
+        // let mut out = Vec::new();
+        // let git_base =
+        //     "https://github.com/MinaProtocol/mina/blob/b14f0da9ebae87acd8764388ab4681ca10f07c89/";
+        // let mut doc = Doc::new(&xref, git_base.to_string(), &mut out);
+        // doc.generate_all().unwrap();
+        // println!("{}", String::from_utf8(out).unwrap());
     }
 }

@@ -21,6 +21,20 @@ where
     }
 }
 
+impl<T, U> NamedShape for (T, U)
+where
+    T: AsRef<str>,
+    U: AsRef<Expression>,
+{
+    fn name(&self) -> &str {
+        self.0.as_ref()
+    }
+
+    fn shape(&self) -> &Expression {
+        &self.1.as_ref()
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("Incorrect root expression: {0}")]
@@ -103,6 +117,31 @@ impl<'a> XRef<'a> {
         self.name_map.iter().map(|(n, t)| (*n, *t))
     }
 }
+
+impl<'a> XRef<'a> {
+    pub(crate) fn can_inline_expression(&self, expr: &Expression) -> bool {
+        match expr {
+            Expression::Base(_, _) => true,
+            Expression::Tuple(_) => true,
+            Expression::Top_app(group, _, _) => self.can_inline_group(group),
+            _ => false,
+        }
+    }
+
+    pub(crate) fn is_anonymous(&self, gid: Gid) -> bool {
+        self.for_gid(gid).map_or(true, |(_, name)| name.is_none())
+    }
+
+    pub(crate) fn can_inline_group(&self, group: &Group) -> bool {
+        self.is_anonymous(group.gid)
+            && group
+                .members
+                .first()
+                .map_or(false, |m| self.can_inline_expression(&m.1 .1))
+    }
+}
+
+
 
 #[cfg(test)]
 mod tests {
