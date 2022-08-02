@@ -1,5 +1,6 @@
 use std::{collections::HashMap, ops::Deref};
 
+use derive_builder::Builder;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
 use thiserror::Error;
@@ -36,8 +37,9 @@ impl<'a> From<Error<'a>> for TokenStream {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 enum Context<'a> {
+    #[default]
     Root,
     TopApp,
     TypeArg(usize),
@@ -46,8 +48,11 @@ enum Context<'a> {
     TupleItem(usize),
 }
 
+#[derive(Builder)]
+#[builder(setter(skip))]
 pub struct Generator<'a> {
     /// Type expression name/id information.
+    #[builder(setter(skip = false))]
     xref: &'a XRef<'a>,
     /// Type variables substitution.
     venv: Venv<'a>,
@@ -58,9 +63,16 @@ pub struct Generator<'a> {
     /// Current context.
     context: Context<'a>,
     /// Base types mapping.
+    #[builder(default = "base_types()")]
     base_types: HashMap<String, BaseTypeMapping>,
     /// Generated groups.
     generated: HashMap<&'a Gid, String>,
+    /// Generate comments.
+    #[builder(setter(skip = false), default)]
+    generate_comments: bool,
+    /// Git repository prefix
+    #[builder(setter(into, strip_option), default)]
+    git_prefix: Option<String>,
 }
 
 pub type Result<'a, T = ()> = std::result::Result<T, Error<'a>>;
@@ -134,6 +146,8 @@ impl<'a> Generator<'a> {
             context: Context::Root,
             base_types: base_types(),
             generated: HashMap::new(),
+            generate_comments: false,
+            git_prefix: Some("git/".to_string()),
         }
     }
 
@@ -282,26 +296,46 @@ impl<'a> Generator<'a> {
         }
     }
 
+    fn git_loc(&self, loc: &str) -> Option<String> {
+        let prefix = self.git_prefix.as_ref()?;
+        let mut it = loc.split(':');
+        let file = it.next()?;
+        let line = it.next()?;
+        Some(format!("[{loc}]({prefix}{file}#L{line})",))
+    }
+
+    fn generate_doc_comment(&self, loc: &str) -> TokenStream {
+        let git_loc = self.git_loc(loc);
+        let loc = git_loc.as_ref().map(String::as_str).unwrap_or(loc);
+        let doc = format!("{loc}");
+        quote! {
+            #[doc = #doc]
+        }
+    }
+
     fn generate_top_app_group(
         &mut self,
         group: &'a Group,
         args: &'a [Expression],
     ) -> Result<'a, TokenStream> {
-        let Group {
-            gid,
-            loc: _,
-            members,
-        } = group;
+        let Group { gid, loc, members } = group;
         if self.generated.contains_key(&gid) {
             return Ok(quote!());
         }
         let (tid, (vids, expr)) = first_member(gid, members)?;
 
-        let name = if matches!(self.context, Context::TopApp) {
+        let (name, comment) = if matches!(self.context, Context::TopApp) {
             // for Top_app inside Top_app the name is reused.
-            None
+            (None, None)
         } else {
-            Some(self.new_name(gid))
+            (
+                Some(self.new_name(gid)),
+                if self.generate_comments {
+                    Some(self.generate_doc_comment(loc))
+                } else {
+                    None
+                },
+            )
         };
         let context = std::mem::replace(&mut self.context, Context::TopApp);
         let venv = self.new_venv(&group.gid, vids, args)?;
@@ -316,7 +350,7 @@ impl<'a> Generator<'a> {
             self.current_name = name;
         }
 
-        Ok(res)
+        Ok(quote!(#comment #res))
     }
 
     fn type_reference(&mut self, expr: &'a Expression) -> TokenStream {
@@ -466,11 +500,7 @@ impl<'a> Generator<'a> {
         Ok(std::mem::replace(&mut self.venv, venv))
     }
 
-    fn new_tenv(
-        &mut self,
-        _gid: &'a i32,
-        tid: &'a str,
-    ) -> HashMap<&'a str, TokenStream> {
+    fn new_tenv(&mut self, _gid: &'a i32, tid: &'a str) -> HashMap<&'a str, TokenStream> {
         let mut tenv = self.tenv.clone();
         if let Some(name) = self.current_name.as_ref() {
             tenv.insert(tid, format_ident!("{name}").to_token_stream());
@@ -512,7 +542,6 @@ impl<'a> Generator<'a> {
     }
 
     fn group_name_or_anon(&self, gid: &Gid) -> String {
-        eprintln!("getting name for group {gid}");
         self.group_name(gid)
             .map_or_else(|| format!("Anonymous{gid}"), String::from)
     }
@@ -601,14 +630,17 @@ mod tests {
     mod gen_type {
         use rust_format::{Formatter, RustFmt};
 
-        use crate::{gen::Generator, shape::Expression, xref::XRef};
+        use crate::{gen::GeneratorBuilder, shape::Expression, xref::XRef};
 
         fn gen_type(name: &str, expr: &str) -> String {
             let expr: Expression = expr.parse().unwrap();
             let binding = [(name, expr.clone())];
             let xref = XRef::new(&binding).unwrap();
-            let ts = Generator::new(&xref).generate_type(&expr);
-            eprintln!("====\n{ts}\n====");
+            let ts = GeneratorBuilder::default()
+                .xref(&xref)
+                .build()
+                .unwrap()
+                .generate_type(&expr);
             RustFmt::default().format_tokens(ts.into()).unwrap()
         }
 
@@ -772,7 +804,7 @@ mod tests {
     mod complex {
         use rust_format::{Formatter, RustFmt};
 
-        use crate::{gen::Generator, shape::Expression, xref::XRef};
+        use crate::{gen::GeneratorBuilder, shape::Expression, xref::XRef};
 
         fn gen_type(name: &str, types: &[(&str, &str)]) -> String {
             let bindings = types
@@ -780,7 +812,14 @@ mod tests {
                 .map(|(n, e)| (n, e.parse::<Expression>().unwrap()))
                 .collect::<Vec<_>>();
             let xref = XRef::new(&bindings).unwrap();
-            let ts = Generator::new(&xref).generate(name).unwrap();
+            let ts = GeneratorBuilder::default()
+                .xref(&xref)
+                // .generate_comments(true)
+                // .git_prefix("https://github.com/MinaProtocol/mina/blob/b14f0da9ebae87acd8764388ab4681ca10f07c89/")
+                .build()
+                .unwrap()
+                .generate(name)
+                .unwrap();
             //eprintln!("====\n{ts}\n====");
             let res = RustFmt::default().format_tokens(ts.into()).unwrap();
             //eprintln!("====\n{res}\n====");

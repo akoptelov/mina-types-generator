@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 derive-new = "0.5.9"
+derive_builder = "0.11.2"
 derive_more = "0.99.17"
 proc-macro2 = "1.0.40"
 quote = "1.0.20"
