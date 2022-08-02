@@ -1,8 +1,9 @@
-use std::{collections::HashMap, ops::Deref};
+use std::{collections::HashMap, io::Write, ops::Deref};
 
 use derive_builder::Builder;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
+use rust_format::{Formatter, RustFmt};
 use thiserror::Error;
 
 use crate::xref::XRef;
@@ -28,7 +29,7 @@ pub enum Error<'a> {
     #[error("Different lenght of type parameters `{1}` and arguments `{2}` for group `{0}`")]
     MismatchTypeParametersLenght(&'a Gid, usize, usize),
     #[error("Type `{0}` not found")]
-    TypeNotFound(&'a str),
+    TypeNotFound(String),
 }
 
 impl<'a> From<Error<'a>> for TokenStream {
@@ -93,49 +94,6 @@ impl BaseTypeMapping {
     }
 }
 
-macro_rules! t {
-    ($name:ident) => {
-        (
-            String::from(stringify!($name)),
-            BaseTypeMapping {
-                rust_id: None,
-                args_num: BaseTypeArgs::None,
-            },
-        )
-    };
-    ($name:ident => $rust_name:ident) => {
-        (
-            String::from(stringify!($name)),
-            BaseTypeMapping {
-                rust_id: Some(String::from(stringify!($rust_name))),
-                args_num: BaseTypeArgs::None,
-            },
-        )
-    };
-    ($name:ident => $rust_name:ident < _ >) => {
-        (
-            String::from(stringify!($name)),
-            BaseTypeMapping {
-                rust_id: Some(String::from(stringify!($rust_name))),
-                args_num: BaseTypeArgs::Single,
-            },
-        )
-    };
-}
-
-fn base_types() -> HashMap<String, BaseTypeMapping> {
-    HashMap::from([
-        t!(bool),
-        t!(int => i32),
-        t!(int32 => i32),
-        t!(float => f32),
-        t!(string => String),
-        t!(option => Option<_>),
-        t!(array => Vec<_>),
-        t!(list => Vec<_>),
-    ])
-}
-
 impl<'a> Generator<'a> {
     fn new(xref: &'a XRef<'a>) -> Self {
         Self {
@@ -151,12 +109,27 @@ impl<'a> Generator<'a> {
         }
     }
 
-    fn generate(&mut self, name: &'a str) -> Result<'a, TokenStream> {
+    pub fn generate_types<T, I, O>(&mut self, types: I, out: &mut O) -> Result<'a, ()>
+    where
+        T: 'a + AsRef<str>,
+        I: IntoIterator<Item = T>,
+        O: Write,
+    {
+        for ty in types {
+            let ty = ty.as_ref();
+            let ts = self.generate(ty)?;
+            let res = RustFmt::default().format_tokens(ts.into()).unwrap();
+            out.write_all(res.as_bytes())?;
+        }
+        Ok(())
+    }
+
+    fn generate(&mut self, name: &str) -> Result<'a, TokenStream> {
         static EMPTY: [Expression; 0] = [];
         let group = self
             .xref
             .for_name(name)
-            .ok_or_else(|| Error::TypeNotFound(name))?;
+            .ok_or_else(|| Error::TypeNotFound(name.to_string()))?;
         Ok(self.generate_top_app_group(group, &EMPTY)?)
     }
 
@@ -452,8 +425,10 @@ impl<'a> Generator<'a> {
     }
 
     fn new_name(&mut self, gid: &'a Gid) -> Option<String> {
-        let new_name = self.group_name(gid).map_or_else(
-            || {
+        let new_name = self
+            .group_name(gid)
+            .map(|name| self.sanitize_name(name))
+            .unwrap_or_else(|| {
                 self.current_name.as_ref().map_or_else(
                     || format!("Anonymous{gid}"),
                     |name| match self.context {
@@ -465,9 +440,7 @@ impl<'a> Generator<'a> {
                         Context::TupleItem(n) => format!("{name}Item{n}"),
                     },
                 )
-            },
-            String::from,
-        );
+            });
         self.generated.insert(gid, new_name.clone());
         std::mem::replace(&mut self.current_name, Some(new_name))
     }
@@ -515,6 +488,25 @@ impl<'a> Generator<'a> {
         )
     }
 
+    fn sanitize_name(&self, name: &str) -> String {
+        let name = name.strip_suffix(".t").unwrap_or(name);
+        let mut san_name = String::new();
+        let mut to_upper = true;
+        for ch in name.chars() {
+            if ch.is_alphanumeric() {
+                san_name.push(if to_upper {
+                    ch.to_ascii_uppercase()
+                } else {
+                    ch
+                });
+                to_upper = false;
+            } else {
+                to_upper = true;
+            }
+        }
+        san_name
+    }
+
     /// Generates Rust representation of Ocaml type `uuid` with type arguments `args`.
     fn base_type_mapping(&self, uuid: &str, args: &[TokenStream]) -> TokenStream {
         if let Some(mapping) = self.base_types.get(uuid) {
@@ -542,8 +534,10 @@ impl<'a> Generator<'a> {
     }
 
     fn group_name_or_anon(&self, gid: &Gid) -> String {
-        self.group_name(gid)
-            .map_or_else(|| format!("Anonymous{gid}"), String::from)
+        self.group_name(gid).map_or_else(
+            || format!("Anonymous{gid}"),
+            |name| self.sanitize_name(name),
+        )
     }
 }
 
@@ -552,6 +546,49 @@ fn first_member<'a>(
     members: &'a Vec<(Tid, (Vec<Vid>, Expression))>,
 ) -> Result<'a, &'a (Tid, (Vec<Vid>, Expression))> {
     members.first().ok_or_else(|| Error::EmptyGroup(gid))
+}
+
+macro_rules! t {
+    ($name:ident) => {
+        (
+            String::from(stringify!($name)),
+            BaseTypeMapping {
+                rust_id: None,
+                args_num: BaseTypeArgs::None,
+            },
+        )
+    };
+    ($name:ident => $rust_name:ident) => {
+        (
+            String::from(stringify!($name)),
+            BaseTypeMapping {
+                rust_id: Some(String::from(stringify!($rust_name))),
+                args_num: BaseTypeArgs::None,
+            },
+        )
+    };
+    ($name:ident => $rust_name:ident < _ >) => {
+        (
+            String::from(stringify!($name)),
+            BaseTypeMapping {
+                rust_id: Some(String::from(stringify!($rust_name))),
+                args_num: BaseTypeArgs::Single,
+            },
+        )
+    };
+}
+
+fn base_types() -> HashMap<String, BaseTypeMapping> {
+    HashMap::from([
+        t!(bool),
+        t!(int => i32),
+        t!(int32 => i32),
+        t!(float => f32),
+        t!(string => String),
+        t!(option => Option<_>),
+        t!(array => Vec<_>),
+        t!(list => Vec<_>),
+    ])
 }
 
 #[cfg(test)]
@@ -798,6 +835,40 @@ mod tests {
             let rust = r#"pub type MyTuple = (i32, String);
 "#;
             assert_eq!(gen_type("MyTuple", src), rust);
+        }
+
+        #[test]
+        fn san_name() {
+            let src = r#"(Top_app
+ ((gid 804) (loc src/lib/merkle_address/merkle_address.ml:48:6)
+  (members
+   ((t
+     (()
+      (Tuple
+       ((Top_app
+         ((gid 163) (loc src/std_internal.ml:119:2)
+          (members
+           ((int
+             (()
+              (Top_app
+               ((gid 113) (loc src/int.ml:19:6)
+                (members ((t (() (Base int ()))))))
+               t ()))))))
+         int ())
+        (Top_app
+         ((gid 170) (loc src/std_internal.ml:140:2)
+          (members
+           ((string
+             (()
+              (Top_app
+               ((gid 83) (loc src/string.ml:44:6)
+                (members ((t (() (Base string ()))))))
+               t ()))))))
+         string ()))))))))
+ t ())"#;
+            let rust = r#"pub type MyTuple = (i32, String);
+"#;
+            assert_eq!(gen_type("My.tuple.t", src), rust);
         }
     }
 

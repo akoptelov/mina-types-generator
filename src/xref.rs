@@ -100,7 +100,7 @@ impl<'a> XRef<'a> {
     }
 
     /// Returns top expression (`[Expression::Top_app]`) registered for the provided `name`.
-    pub fn for_name(&self, name: &str) -> Option<&Group> {
+    pub fn for_name(&'a self, name: &str) -> Option<&'a Group> {
         self.name_map.get(name).map(Deref::deref)
     }
 
