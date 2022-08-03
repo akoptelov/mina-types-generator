@@ -1,4 +1,7 @@
-use std::{collections::{HashSet, HashMap}, io::Write};
+use std::{
+    collections::HashSet,
+    io::Write,
+};
 
 use thiserror::Error;
 
@@ -23,16 +26,11 @@ pub enum Error {
     TypeNotFound(String),
 }
 
-type Venv = HashMap<Vid, Expression>;
-type Tenv = HashMap<Tid, Expression>;
-
 pub struct Doc<'a, O>
 where
     O: Write,
 {
     xref: &'a XRef<'a>,
-    venv: Venv,
-    tenv: Tenv,
     out: &'a mut O,
     git_base: String,
     all: bool,
@@ -52,8 +50,6 @@ where
     pub fn new(xref: &'a XRef<'a>, git_base: String, out: &'a mut O) -> Self {
         Self {
             xref,
-            venv: HashMap::new(),
-            tenv: HashMap::new(),
             git_base,
             out,
             all: false,
@@ -400,10 +396,7 @@ fn loc_to_git(loc: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        shape::eval,
-        xref::XRef,
-    };
+    use crate::{eval::eval, xref::XRef};
 
     use super::Doc;
 
