@@ -1,6 +1,9 @@
 use thiserror::Error;
 
-use crate::{shape::*, visit::{Visitor, Visiting}};
+use crate::{
+    shape::*,
+    visit::{Visiting, Visitor},
+};
 use std::{collections::HashMap, ops::Deref};
 
 pub trait NamedShape {
@@ -42,8 +45,8 @@ pub enum Error {
 }
 
 pub struct XRef<'a> {
-    gid_map: HashMap<i32, (&'a Group, Option<&'a str>)>,
-    name_map: HashMap<&'a str, &'a Group>,
+    gid_map: HashMap<i32, (&'a Expression, Option<&'a str>)>,
+    name_map: HashMap<&'a str, &'a Expression>,
 }
 
 impl<'a> XRef<'a> {
@@ -57,9 +60,9 @@ impl<'a> XRef<'a> {
         let mut gid_name = HashMap::new();
         for ty in types {
             if let Expression::Top_app(group, ..) = ty.shape() {
-                name_map.insert(ty.name(), group);
+                name_map.insert(ty.name(), ty.shape());
                 gid_name.insert(group.gid, ty.name());
-                gid_map.insert(group.gid, (group, Some(ty.name())));
+                gid_map.insert(group.gid, (ty.shape(), Some(ty.name())));
             } else {
                 return Err(Error::IncorrectExpression(format!(
                     "Wrong type for {name}",
@@ -70,7 +73,7 @@ impl<'a> XRef<'a> {
 
         struct GidVisitor<'a, 'b: 'a> {
             gid_name: HashMap<Gid, &'b str>,
-            gid_map: &'a mut HashMap<Gid, (&'b Group, Option<&'b str>)>,
+            gid_map: &'a mut HashMap<Gid, (&'b Expression, Option<&'b str>)>,
         }
 
         impl<'a, 'b> Visitor<'b> for GidVisitor<'a, 'b> {
@@ -80,7 +83,7 @@ impl<'a> XRef<'a> {
                         return;
                     }
                     let name = self.gid_name.get(&group.gid).map(|n| *n);
-                    self.gid_map.insert(group.gid, (group, name));
+                    self.gid_map.insert(group.gid, (expr, name));
                 }
                 expr.visit(self)
             }
@@ -91,22 +94,33 @@ impl<'a> XRef<'a> {
             gid_map: &mut gid_map,
         };
 
-        name_map.iter().for_each(|(_name, group)| {
-            group.visit(&mut visitor)
-        });
+        name_map
+            .iter()
+            .for_each(|(_name, group)| group.visit(&mut visitor));
 
         let result = Self { gid_map, name_map };
         Ok(result)
     }
 
     /// Returns top expression (`[Expression::Top_app]`) registered for the provided `name`.
-    pub fn for_name(&'a self, name: &str) -> Option<&'a Group> {
+    pub fn expr_for_name(&'a self, name: &str) -> Option<&'a Expression> {
         self.name_map.get(name).map(Deref::deref)
     }
 
+    /// Returns top expression (`[Expression::Top_app]`) registered for the provided `name`.
+    pub fn for_name(&'a self, name: &str) -> Option<&'a Group> {
+        self.expr_for_name(name).and_then(Expression::as_group)
+    }
+
     /// Returns a pair of `[Expression]` and optional name for the specified `gid`.
-    pub fn for_gid(&self, gid: Gid) -> Option<(&Group, Option<&str>)> {
+    pub fn expr_for_gid(&self, gid: Gid) -> Option<(&Expression, Option<&str>)> {
         self.gid_map.get(&gid).map(|t| *t)
+    }
+
+    /// Returns a pair of `[Group]` and optional name for the specified `gid`.
+    pub fn for_gid(&self, gid: Gid) -> Option<(&Group, Option<&str>)> {
+        self.expr_for_gid(gid)
+            .and_then(|(expr, n)| expr.as_group().map(|group| (group, n)))
     }
 
     pub fn names(&self) -> impl Iterator<Item = &str> {
@@ -114,7 +128,9 @@ impl<'a> XRef<'a> {
     }
 
     pub fn named(&self) -> impl Iterator<Item = (&str, &Group)> {
-        self.name_map.iter().map(|(n, t)| (*n, *t))
+        self.name_map
+            .iter()
+            .filter_map(|(n, t)| t.as_group().map(|g| (*n, g)))
     }
 }
 
@@ -123,7 +139,10 @@ impl<'a> XRef<'a> {
         match expr {
             Expression::Base(_, _) => true,
             Expression::Tuple(_) => true,
-            Expression::Top_app(group, _, _) => self.can_inline_group(group),
+            Expression::Top_app(group, _, _args) => {
+                self.can_inline_group(group)
+                //                    && args.iter().all(|arg| self.can_inline_expression(arg))
+            }
             _ => false,
         }
     }
@@ -140,8 +159,6 @@ impl<'a> XRef<'a> {
                 .map_or(false, |m| self.can_inline_expression(&m.1 .1))
     }
 }
-
-
 
 #[cfg(test)]
 mod tests {
@@ -215,5 +232,4 @@ mod tests {
         let named = xref.named().next().unwrap();
         assert!(matches!(named.1, Group { .. }));
     }
-
 }

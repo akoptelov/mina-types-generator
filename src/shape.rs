@@ -84,6 +84,16 @@ impl FromStr for Group {
     }
 }
 
+impl Expression {
+    pub fn as_group(&self) -> Option<&Group> {
+        if let Expression::Top_app(group, ..) = self {
+            Some(group)
+        } else {
+            None
+        }
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum CanonicalizeError {
     #[error("Empty group `{0}`")]

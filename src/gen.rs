@@ -3,7 +3,7 @@ use std::{collections::HashMap, io::Write, ops::Deref};
 use derive_builder::Builder;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
-use rust_format::{Formatter, RustFmt};
+use rust_format::{Config, Formatter, PostProcess, RustFmt};
 use thiserror::Error;
 
 use crate::xref::XRef;
@@ -38,7 +38,7 @@ impl<'a> From<Error<'a>> for TokenStream {
     }
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
 enum Context<'a> {
     #[default]
     Root,
@@ -118,19 +118,25 @@ impl<'a> Generator<'a> {
         for ty in types {
             let ty = ty.as_ref();
             let ts = self.generate(ty)?;
-            let res = RustFmt::default().format_tokens(ts.into()).unwrap();
+            let config = Config::new_str().post_proc(PostProcess::ReplaceMarkersAndDocBlocks);
+            let res = RustFmt::from_config(config)
+                .format_tokens(ts.into())
+                .unwrap();
             out.write_all(res.as_bytes())?;
+            // out.write_all(
+            //     ts.to_string().as_bytes(), // res
+            // )?;
+            //
         }
         Ok(())
     }
 
     fn generate(&mut self, name: &str) -> Result<'a, TokenStream> {
-        static EMPTY: [Expression; 0] = [];
-        let group = self
+        let expr = self
             .xref
-            .for_name(name)
+            .expr_for_name(name)
             .ok_or_else(|| Error::TypeNotFound(name.to_string()))?;
-        Ok(self.generate_top_app_group(group, &EMPTY)?)
+        Ok(self.generate_type(expr))
     }
 
     fn generate_type(&mut self, expr: &'a Expression) -> TokenStream {
@@ -236,9 +242,13 @@ impl<'a> Generator<'a> {
         _tid: &str,
         args: &'a [Expression],
     ) -> TokenStream {
+        if self.xref.is_anonymous(group.gid) && self.generated.contains_key(&group.gid) {
+            return quote!();
+        }
+
         let arg_types = args
             .iter()
-            .filter(|arg| !self.xref.can_inline_expression(arg))
+            // .filter(|arg| !self.xref.can_inline_expression(arg))
             .enumerate()
             .map(|(i, arg)| {
                 let context = std::mem::replace(&mut self.context, Context::TypeArg(i));
@@ -248,23 +258,12 @@ impl<'a> Generator<'a> {
             })
             .collect::<Vec<_>>();
 
-        let main = if self.xref.can_inline_group(group) {
-            let base = self.type_reference_group(group);
-            let name = self.current_name_tokens();
-            if args.is_empty() {
-                quote!(pub type #name = #base;)
-            } else {
-                let args = args.iter().map(|arg| self.type_reference(arg));
-                quote!(pub type #name = #base<#(#args),*>;)
-            }
-        } else {
-            self.generate_top_app_group(group, args)
-                .unwrap_or_else(|e| e.into())
-        };
+        let main = self
+            .generate_top_app_group(group, args)
+            .unwrap_or_else(|e| e.into());
 
         quote! {
             #main
-
             #(#arg_types)*
         }
     }
@@ -277,10 +276,15 @@ impl<'a> Generator<'a> {
         Some(format!("[{loc}]({prefix}{file}#L{line})",))
     }
 
-    fn generate_doc_comment(&self, loc: &str) -> TokenStream {
+    fn generate_doc_comment(&self, gid: &Gid, loc: &str) -> TokenStream {
         let git_loc = self.git_loc(loc);
         let loc = git_loc.as_ref().map(String::as_str).unwrap_or(loc);
-        let doc = format!("{loc}");
+        let name = self
+            .xref
+            .for_gid(*gid)
+            .and_then(|(_, name)| name)
+            .map_or_else(|| format!("gid {gid}"), String::from);
+        let doc = format!(" {name}\n {loc}");
         quote! {
             #[doc = #doc]
         }
@@ -292,7 +296,11 @@ impl<'a> Generator<'a> {
         args: &'a [Expression],
     ) -> Result<'a, TokenStream> {
         let Group { gid, loc, members } = group;
-        if self.generated.contains_key(&gid) {
+        // if self.generated.contains_key(&gid) {
+        //     return Ok(quote!());
+        // }
+        //
+        if self.xref.is_anonymous(*gid) && matches!(self.context, Context::TypeArg(_)) {
             return Ok(quote!());
         }
         let (tid, (vids, expr)) = first_member(gid, members)?;
@@ -304,7 +312,7 @@ impl<'a> Generator<'a> {
             (
                 Some(self.new_name(gid)),
                 if self.generate_comments {
-                    Some(self.generate_doc_comment(loc))
+                    Some(self.generate_doc_comment(gid, loc))
                 } else {
                     None
                 },
@@ -323,7 +331,10 @@ impl<'a> Generator<'a> {
             self.current_name = name;
         }
 
-        Ok(quote!(#comment #res))
+        Ok(quote! {
+            #comment
+            #res
+        })
     }
 
     fn type_reference(&mut self, expr: &'a Expression) -> TokenStream {
@@ -638,6 +649,67 @@ mod tests {
         }
 
         #[test]
+        fn top_app_base_type() {
+            let src = r#"(Top_app
+ ((gid 167) (loc src/std_internal.ml:131:2)
+  (members
+   ((list
+     ((a)
+      (Top_app
+       ((gid 50) (loc src/list0.ml:6:0)
+        (members
+         ((t ((a) (Base list ((Var (src/list0.ml:6:12 a)))))))))
+       t ((Var (src/std_internal.ml:131:17 a)))))))))
+ list
+ ((Top_app
+   ((gid 681) (loc src/lib/mina_base/transaction_status.ml:9:6)
+    (members
+     ((t
+       (()
+        (Base foo ()
+              ))))))
+   t ())))"#;
+            assert_eq!(gen_ref(src), "Vec < foo >");
+
+            let src = r#"(Top_app
+ ((gid 683) (loc src/lib/mina_base/transaction_status.ml:71:8)
+  (members
+   ((t
+     (()
+      (Top_app
+       ((gid 167) (loc src/std_internal.ml:131:2)
+        (members
+         ((list
+           ((a)
+            (Top_app
+             ((gid 50) (loc src/list0.ml:6:0)
+              (members ((t ((a) (Base list ((Var (src/list0.ml:6:12 a)))))))))
+             t ((Var (src/std_internal.ml:131:17 a)))))))))
+       list
+       ((Top_app
+         ((gid 167) (loc src/std_internal.ml:131:2)
+          (members
+           ((list
+             ((a)
+              (Top_app
+               ((gid 50) (loc src/list0.ml:6:0)
+                (members
+                 ((t ((a) (Base list ((Var (src/list0.ml:6:12 a)))))))))
+               t ((Var (src/std_internal.ml:131:17 a)))))))))
+         list
+         ((Top_app
+           ((gid 681) (loc src/lib/mina_base/transaction_status.ml:9:6)
+            (members
+             ((t
+               (()
+                (Base foo ()
+                 ))))))
+           t ()))))))))))
+ t ())"#;
+            assert_eq!(gen_ref(src), "Vec < Vec < foo > >");
+        }
+
+        #[test]
         fn top_app() {
             // top_app without top-level name should be inlined
             assert_eq!(
@@ -659,7 +731,7 @@ mod tests {
               (members ((t (() (Base string ()))))))
              t ())"#
                 ),
-                "top"
+                "Top"
             );
         }
     }
@@ -891,10 +963,71 @@ mod tests {
                 .unwrap()
                 .generate(name)
                 .unwrap();
-            //eprintln!("====\n{ts}\n====");
+            eprintln!("====\n{ts}\n====");
             let res = RustFmt::default().format_tokens(ts.into()).unwrap();
-            //eprintln!("====\n{res}\n====");
+            eprintln!("====\n{res}\n====");
             res
+        }
+
+        #[test]
+        fn collection() {
+            let collection = r#"(Top_app
+ ((gid 683) (loc src/lib/mina_base/transaction_status.ml:71:8)
+  (members
+   ((t
+     (()
+      (Top_app
+       ((gid 167) (loc src/std_internal.ml:131:2)
+        (members
+         ((list
+           ((a)
+            (Top_app
+             ((gid 50) (loc src/list0.ml:6:0)
+              (members ((t ((a) (Base list ((Var (src/list0.ml:6:12 a)))))))))
+             t ((Var (src/std_internal.ml:131:17 a)))))))))
+       list
+       ((Top_app
+         ((gid 167) (loc src/std_internal.ml:131:2)
+          (members
+           ((list
+             ((a)
+              (Top_app
+               ((gid 50) (loc src/list0.ml:6:0)
+                (members
+                 ((t ((a) (Base list ((Var (src/list0.ml:6:12 a)))))))))
+               t ((Var (src/std_internal.ml:131:17 a)))))))))
+         list
+         ((Top_app
+           ((gid 681) (loc src/lib/mina_base/transaction_status.ml:9:6)
+            (members
+             ((t
+               (()
+                (Variant
+                 ((Predicate ()) (Source_not_present ())
+                  (Incorrect_nonce ()) (Invalid_fee_excess ()))))))))
+           t ()))))))))))
+ t ())"#;
+            let item = r#"(Top_app
+ ((gid 681) (loc src/lib/mina_base/transaction_status.ml:9:6)
+  (members
+   ((t
+     (()
+      (Variant
+       ((Predicate ()) (Source_not_present ()) (Receiver_not_present ())
+        (Invalid_fee_excess ()))))))))
+ t ())"#;
+            let rust = r#"pub type Collection = Vec<Vec<Item>>;
+pub enum Item {
+    Predicate,
+    Source_not_present,
+    Incorrect_nonce,
+    Invalid_fee_excess,
+}
+"#;
+            assert_eq!(
+                gen_type("Collection", &[("Collection", collection), ("Item", item),],),
+                rust
+            );
         }
 
         #[test]
@@ -1264,5 +1397,19 @@ pub struct MyTypeArg0Arg0 {
 "#;
             assert_eq!(gen_type("MyType", &[("MyType", src)]), rust);
         }
+    }
+
+    #[test]
+    fn test() {
+        use proc_macro2::TokenStream;
+        use quote::quote;
+        use rust_format::{Formatter, RustFmt};
+        let err =
+            syn::Error::new(proc_macro2::Span::call_site(), "error, error").to_compile_error();
+
+        let ts = quote!(type Foo = Vec<#err>;);
+        let res = RustFmt::default().format_tokens(ts.into()).unwrap();
+
+        println!("{res}");
     }
 }
