@@ -405,18 +405,38 @@ impl<'a> Generator<'a> {
         let venv = ok_or_gen_error!(self.new_venv(&group.gid, vids, args, Some(&type_name)));
         let tenv = self.new_tenv(gid, tid, Some(&type_name));
 
-        let mut expr = self.generate_type(Some(&type_name), expr);
-        if !expr.is_empty() {
-            let mut comment = self.generate_doc_comment(gid, loc);
-            comment.extend(expr);
-            expr = comment;
-        }
+        let expr = if self.is_named(expr) {
+            let type_name = format_ident!("{type_name}");
+            let type_ref = self.type_reference(None, expr);
+            let comment = self.generate_doc_comment(gid, loc);
+            quote!{
+                #comment
+                pub type #type_name = #type_ref;
+            }
+        } else {
+            let expr = self.generate_type(Some(&type_name), expr);
+            if !expr.is_empty() {
+                let comment = self.generate_doc_comment(gid, loc);
+                quote! {
+                    #comment
+                    #expr
+                }
+            } else {
+                quote!()
+            }
+        };
 
         self.tenv = tenv;
         self.venv = venv;
 
-        quote! {
-            #expr
+        expr
+    }
+
+    fn is_named(&self, expr: &Expression) -> bool {
+        if let Expression::Top_app(group, _, _) = expr {
+            !self.xref.is_anonymous(group.gid)
+        } else {
+            false
         }
     }
 
@@ -711,11 +731,13 @@ fn base_types() -> HashMap<String, BaseTypeMapping> {
         t!(bool),
         t!(int => i32),
         t!(int32 => i32),
+        t!(int64 => i64),
         t!(float => f32),
         t!(string => String),
         t!(option => Option<_>),
         t!(array => Vec<_>),
         t!(list => Vec<_>),
+        t!(kimchi_backend_bigint_32_V1 => BigInt)
     ])
 }
 
