@@ -78,14 +78,17 @@ impl<'a> XRef<'a> {
 
         impl<'a, 'b> Visitor<'b> for GidVisitor<'a, 'b> {
             fn apply(&mut self, expr: &'b Expression) {
-                if let Expression::Top_app(group, ..) = expr {
+                if let Expression::Top_app(group, _, args) = expr {
                     if self.gid_map.contains_key(&group.gid) {
-                        return;
+                        args.iter().for_each(|arg| self.apply(arg))
+                    } else {
+                        let name = self.gid_name.get(&group.gid).map(|n| *n);
+                        self.gid_map.insert(group.gid, (expr, name));
+                        expr.visit(self)
                     }
-                    let name = self.gid_name.get(&group.gid).map(|n| *n);
-                    self.gid_map.insert(group.gid, (expr, name));
+                } else {
+                    expr.visit(self)
                 }
-                expr.visit(self)
             }
         }
 
@@ -139,10 +142,7 @@ impl<'a> XRef<'a> {
         match expr {
             Expression::Base(_, _) => true,
             Expression::Tuple(_) => true,
-            Expression::Top_app(group, _, _args) => {
-                self.can_inline_group(group)
-                //                    && args.iter().all(|arg| self.can_inline_expression(arg))
-            }
+            Expression::Top_app(group, _, _args) => self.can_inline_group(group),
             _ => false,
         }
     }

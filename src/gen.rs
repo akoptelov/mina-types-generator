@@ -150,7 +150,7 @@ impl<'a> Generator<'a> {
         }
     }
 
-    pub fn generate_types<T, I, O>(&mut self, types: I) -> TokenStream
+    pub fn generate_types<T, I>(&mut self, types: I) -> TokenStream
     where
         T: 'a + AsRef<str>,
         I: IntoIterator<Item = T>,
@@ -191,7 +191,7 @@ impl<'a> Generator<'a> {
             Expression::Record(exprs) => self.generate_record(type_name, exprs),
             Expression::Variant(alts) => self.generate_variant(type_name, alts),
             Expression::Tuple(exprs) => self.generate_tuple(type_name, exprs),
-            Expression::Poly_variant(_) => todo!(),
+            Expression::Poly_variant(xxx) => gen_error!("TODO Poly_variant {xxx:?}"),
             Expression::Var((loc, vid)) => self.generate_var(type_name, loc, vid),
             Expression::Rec_app(tid, args) => self.generate_rec_app(type_name, tid, args),
             Expression::Top_app(group, tid, args) => {
@@ -210,7 +210,8 @@ impl<'a> Generator<'a> {
             some_or_gen_error!(type_name, Error::Assert(format!("No name for base type")));
         let args = args
             .iter()
-            .map(|arg| self.type_reference(None, arg))
+            .enumerate()
+            .map(|(i, arg)| self.type_reference(Some(&format!("{type_name}Arg{i}")), arg))
             .collect::<Vec<_>>();
         let base = self.base_type_mapping(uuid, &args);
         let name = format_ident!("{type_name}");
@@ -411,13 +412,15 @@ impl<'a> Generator<'a> {
 
     fn type_reference_base(
         &mut self,
-        _name_hint: Option<&str>,
+        name_hint: Option<&str>,
         uuid: &'a str,
         args: &'a [Expression],
     ) -> TokenStream {
+        let type_name = name_hint.unwrap_or("UnknownBaseType");
         let args = args
             .iter()
-            .map(|arg| self.type_reference(None, arg))
+            .enumerate()
+            .map(|(i, arg)| self.type_reference(Some(&format!("{type_name}Arg{i}")), arg))
             .collect::<Vec<_>>();
         self.base_type_mapping(uuid, &args)
     }
