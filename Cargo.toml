@@ -11,8 +11,8 @@ derive_builder = "0.11.2"
 derive_more = "0.99.17"
 proc-macro2 = "1.0.40"
 quote = "1.0.20"
-rsexp = { path = "../rsexp" }
-rsexp-derive = { path = "../rsexp/rsexp-derive" }
+rsexp = { git = "https://github.com/name-placeholder/rsexp" }
+rsexp-derive = { git = "https://github.com/name-placeholder/rsexp" }
 serde = { version = "1.0.142", features = ["derive"] }
 syn = "1.0.98"
 thiserror = "1.0.31"
