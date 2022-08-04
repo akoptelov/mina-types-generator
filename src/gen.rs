@@ -492,11 +492,7 @@ impl<'a> Generator<'a> {
         _tid: &str,
         args: &'a [Expression],
     ) -> TokenStream {
-        let Group {
-            gid,
-            loc: _,
-            members,
-        } = group;
+        let Group { gid, loc, members } = group;
 
         if self.xref.can_inline_group(group) {
             let (tid, (vids, expr)) = some_or_gen_error!(members.first(), Error::EmptyGroup(gid));
@@ -521,7 +517,8 @@ impl<'a> Generator<'a> {
                     ));
                     self.name_mapping
                         .insert(gid, TypeStatus::Pending(type_name.clone()));
-                    self.generate_aux_type(gid);
+                    let ts = self.generate_top_app(Some(&type_name), group, loc, args);
+                    self.aux_types.extend(ts);
                     type_name
                 }
             };
