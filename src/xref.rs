@@ -71,35 +71,35 @@ impl<'a> XRef<'a> {
             }
         }
 
-        struct GidVisitor<'a, 'b: 'a> {
-            gid_name: HashMap<Gid, &'b str>,
-            gid_map: &'a mut HashMap<Gid, (&'b Expression, Option<&'b str>)>,
-        }
+        // struct GidVisitor<'a, 'b: 'a> {
+        //     gid_name: HashMap<Gid, &'b str>,
+        //     gid_map: &'a mut HashMap<Gid, (&'b Expression, Option<&'b str>)>,
+        // }
 
-        impl<'a, 'b> Visitor<'b> for GidVisitor<'a, 'b> {
-            fn apply(&mut self, expr: &'b Expression) {
-                if let Expression::Top_app(group, _, args) = expr {
-                    if self.gid_map.contains_key(&group.gid) {
-                        args.iter().for_each(|arg| self.apply(arg))
-                    } else {
-                        let name = self.gid_name.get(&group.gid).map(|n| *n);
-                        self.gid_map.insert(group.gid, (expr, name));
-                        expr.visit(self)
-                    }
-                } else {
-                    expr.visit(self)
-                }
-            }
-        }
+        // impl<'a, 'b> Visitor<'b> for GidVisitor<'a, 'b> {
+        //     fn apply(&mut self, expr: &'b Expression) {
+        //         if let Expression::Top_app(group, _, args) = expr {
+        //             if self.gid_map.contains_key(&group.gid) {
+        //                 args.iter().for_each(|arg| self.apply(arg))
+        //             } else {
+        //                 let name = self.gid_name.get(&group.gid).map(|n| *n);
+        //                 self.gid_map.insert(group.gid, (expr, name));
+        //                 expr.visit(self)
+        //             }
+        //         } else {
+        //             expr.visit(self)
+        //         }
+        //     }
+        // }
 
-        let mut visitor = GidVisitor {
-            gid_name,
-            gid_map: &mut gid_map,
-        };
+        // let mut visitor = GidVisitor {
+        //     gid_name,
+        //     gid_map: &mut gid_map,
+        // };
 
-        name_map
-            .iter()
-            .for_each(|(_name, group)| group.visit(&mut visitor));
+        // name_map
+        //     .iter()
+        //     .for_each(|(_name, group)| group.visit(&mut visitor));
 
         let result = Self { gid_map, name_map };
         Ok(result)

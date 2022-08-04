@@ -176,7 +176,6 @@ impl<'a> Generator<'a> {
     }
 
     fn generate_for_name(&mut self, name: &str) -> TokenStream {
-        eprintln!("generating for {name}...");
         self.xref.expr_for_name(name).map_or_else(
             || Error::TypeNotFound(name.to_string()).into(),
             |expr| self.generate_type(None, expr),
@@ -391,10 +390,14 @@ impl<'a> Generator<'a> {
                 return quote!();
             }
         }
-        let type_name = self.sanitize_name(some_or_gen_error!(
-            self.group_name(gid).or(type_name),
-            Error::UnknownGroupName(gid)
-        ));
+        let type_name = if named {
+            self.sanitize_name(some_or_gen_error!(
+                self.group_name(gid).or(type_name),
+                Error::UnknownGroupName(gid)
+            ))
+        } else {
+            some_or_gen_error!(type_name, Error::UnknownGroupName(gid)).to_string()
+        };
         self.name_mapping
             .insert(gid, TypeStatus::Generated(type_name.clone()));
 
