@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use derive_builder::Builder;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, ToTokens};
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::xref::XRef;
@@ -69,7 +70,7 @@ impl<'a> From<Error<'a>> for TokenStream {
     }
 }
 
-#[derive(Builder)]
+#[derive(Serialize, Deserialize, Builder)]
 pub struct Config {
     /// Generate comments.
     #[builder(default)]
@@ -83,13 +84,49 @@ pub struct Config {
     #[builder(setter(into, strip_option), default)]
     git_prefix: Option<String>,
 
+    /// Rust file preamble.
+    #[builder(default)]
+    #[serde(with = "token_stream")]
+    preamble: TokenStream,
+
     /// Base types mapping.
     #[builder(default = "base_types()")]
     base_types: HashMap<String, BaseTypeMapping>,
+}
 
-    /// Rust file preamble.
-    #[builder(default)]
-    preamble: TokenStream,
+mod token_stream {
+    use proc_macro2::TokenStream;
+    use serde::{de::Visitor, Deserializer, Serializer};
+
+    pub fn serialize<S>(ts: &TokenStream, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&ts.to_string())
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<TokenStream, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct V;
+        impl<'de> Visitor<'de> for V {
+            type Value = TokenStream;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("Rust token stream")
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                v.parse().map_err(|e| E::custom(format!("lexer error {e}")))
+            }
+        }
+
+        deserializer.deserialize_str(V)
+    }
 }
 
 /// Status of a type generationl.
@@ -129,14 +166,15 @@ pub struct Generator<'a> {
 
 pub type Result<'a, T = ()> = std::result::Result<T, Error<'a>>;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum BaseTypeArgs {
     None,
     Single,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BaseTypeMapping {
+    #[serde(with = "token_stream")]
     pub rust_id: TokenStream,
     pub args_num: BaseTypeArgs,
 }
@@ -543,11 +581,15 @@ impl<'a> Generator<'a> {
 
     fn type_reference_poly_variant(
         &mut self,
-        _name_hint: Option<&str>,
+        name_hint: Option<&str>,
         _loc: &str,
         _constrs: &[PolyConstr],
     ) -> TokenStream {
-        todo!()
+        let name = some_or_gen_error!(
+            name_hint,
+            Error::Assert("issue with poly_variant".to_string())
+        );
+        format_ident!("{name}").to_token_stream()
     }
 
     fn type_reference_var(&self, _name_hint: Option<&str>, _loc: &str, vid: &str) -> TokenStream {
@@ -1615,6 +1657,15 @@ pub enum MyTypeTree {
 }
 "#;
             assert_eq!(gen_type("MyType", &[("MyType", src)]), rust);
+        }
+    }
+
+    mod toml {
+        #[test]
+        fn serialize() {
+            let config = super::super::ConfigBuilder::default().build().unwrap();
+            let toml = toml::to_string_pretty(&config).unwrap();
+            println!("==========\n{toml}\n========");
         }
     }
 
