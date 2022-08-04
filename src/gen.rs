@@ -1348,11 +1348,11 @@ pub enum Item {
     pub target: StackVersioned,
 }
 pub struct StateStack {
-    pub init: kimchi_backend_bigint_32_V1,
-    pub curr: kimchi_backend_bigint_32_V1,
+    pub init: BigInt,
+    pub curr: BigInt,
 }
 pub struct StackVersioned {
-    pub data: kimchi_backend_bigint_32_V1,
+    pub data: BigInt,
     pub state: StateStack,
 }
 "#;
@@ -1544,17 +1544,17 @@ pub struct StackVersioned {
     pub tree: MyTypeTree,
 }
 pub struct MyTypeArg2Arg1 {
-    pub init: kimchi_backend_bigint_32_V1,
-    pub curr: kimchi_backend_bigint_32_V1,
+    pub init: BigInt,
+    pub curr: BigInt,
 }
 pub struct MyTypeArg2 {
-    pub data: kimchi_backend_bigint_32_V1,
+    pub data: BigInt,
     pub state: MyTypeArg2Arg1,
 }
 pub enum MyTypeTree {
     Account(MyTypeArg2),
-    Hash(kimchi_backend_bigint_32_V1),
-    Node(kimchi_backend_bigint_32_V1, MyTypeTree, MyTypeTree),
+    Hash(BigInt),
+    Node(BigInt, MyTypeTree, MyTypeTree),
 }
 "#;
             assert_eq!(gen_type("MyType", &[("MyType", src)]), rust);
