@@ -1,5 +1,3 @@
-use bin_prot_rs::{shape::Expression, xref::XRef};
-
 mod gen_utils;
 
 const ONE: &str = r#"(Top_app

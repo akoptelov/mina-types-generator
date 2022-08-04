@@ -382,7 +382,7 @@ impl<'a> Generator<'a> {
             .iter()
             .map(|constr| self.generate_poly_constr(type_name, constr));
         quote! {
-            enum #name {
+            pub enum #name {
                 #(#constrs,)*
             }
         }
@@ -934,16 +934,6 @@ mod tests {
             shape::Expression,
             xref::XRef,
         };
-
-        fn gen_type(name: &str, expr: &str) -> String {
-            let expr: Expression = expr.parse().unwrap();
-            let binding = [(name, expr.clone())];
-            let xref = XRef::new(&binding).unwrap();
-            let ts = Generator::new(&xref, ConfigBuilder::default().build().unwrap())
-                .generate_type(None, &expr);
-            eprintln!("{ts}");
-            RustFmt::default().format_tokens(ts.into()).unwrap()
-        }
 
         #[test]
         fn preamble() {

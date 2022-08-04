@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use rust_format::{Formatter, RustFmt};
 
 use bin_prot_rs::{
