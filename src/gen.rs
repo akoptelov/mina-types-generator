@@ -497,7 +497,7 @@ impl<'a> Generator<'a> {
         let git_loc = self.git_loc(loc);
         let loc = git_loc.as_ref().map(String::as_str).unwrap_or(loc);
         let doc = if let Some(name) = self.xref.for_gid(*gid).and_then(|(_, name)| name) {
-            format!(" Origin: {name}\n Location: {loc}")
+            format!(" **Origin**: `{name}`\n\n **Location**: {loc}")
         } else {
             format!(" Location: {loc}")
         };
