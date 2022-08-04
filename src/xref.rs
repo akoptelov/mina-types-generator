@@ -1,9 +1,6 @@
 use thiserror::Error;
 
-use crate::{
-    shape::*,
-    visit::{Visiting, Visitor},
-};
+use crate::shape::*;
 use std::{collections::HashMap, ops::Deref};
 
 pub trait NamedShape {

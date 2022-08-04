@@ -70,20 +70,26 @@ impl<'a> From<Error<'a>> for TokenStream {
 }
 
 #[derive(Builder)]
-#[allow(dead_code)]
 pub struct Config {
     /// Generate comments.
     #[builder(default)]
     generate_comments: bool,
+
     /// Add blank line markers between types.
     #[builder(default)]
     blank_lines: bool,
+
     /// Git repository prefix
     #[builder(setter(into, strip_option), default)]
     git_prefix: Option<String>,
+
     /// Base types mapping.
     #[builder(default = "base_types()")]
     base_types: HashMap<String, BaseTypeMapping>,
+
+    /// Rust file preamble.
+    #[builder(default)]
+    preamble: TokenStream,
 }
 
 /// Status of a type generationl.
@@ -131,14 +137,8 @@ pub enum BaseTypeArgs {
 
 #[derive(Clone, Debug)]
 pub struct BaseTypeMapping {
-    pub rust_id: Option<String>,
+    pub rust_id: TokenStream,
     pub args_num: BaseTypeArgs,
-}
-
-impl BaseTypeMapping {
-    fn rust_id(&self) -> Option<&str> {
-        self.rust_id.as_ref().map(|s| s.as_str())
-    }
 }
 
 impl<'a> Generator<'a> {
@@ -158,20 +158,24 @@ impl<'a> Generator<'a> {
         T: 'a + AsRef<str>,
         I: IntoIterator<Item = T>,
     {
-        let mut ts = types.into_iter().fold(TokenStream::new(), |mut ts, name| {
-            ts.extend(self.generate_for_name(name.as_ref()));
-            if self.config.blank_lines {
-                ts.extend(quote!(_blank_!();));
-            }
-            ts
-        });
+        let mut ts = types
+            .into_iter()
+            .fold(self.config.preamble.clone(), |mut ts, name| {
+                ts.extend(self.generate_for_name(name.as_ref()));
+                if self.config.blank_lines {
+                    ts.extend(quote!(_blank_!();));
+                }
+                ts
+            });
         ts.extend(std::mem::take(&mut self.aux_types));
         ts
     }
 
     pub fn generate(&mut self, name: &str) -> TokenStream {
-        let mut ts = self.generate_for_name(name);
-        ts.extend(std::mem::take(&mut self.aux_types));
+        let mut ts = self.config.preamble.clone();
+
+        self.generate_for_name(name).to_tokens(&mut ts);
+        std::mem::take(&mut self.aux_types).to_tokens(&mut ts);
         ts
     }
 
@@ -409,7 +413,7 @@ impl<'a> Generator<'a> {
             let type_name = format_ident!("{type_name}");
             let type_ref = self.type_reference(None, expr);
             let comment = self.generate_doc_comment(gid, loc);
-            quote!{
+            quote! {
                 #comment
                 pub type #type_name = #type_ref;
             }
@@ -672,7 +676,7 @@ impl<'a> Generator<'a> {
     /// Generates Rust representation of Ocaml type `uuid` with type arguments `args`.
     fn base_type_mapping(&self, uuid: &str, args: &[TokenStream]) -> TokenStream {
         if let Some(mapping) = self.config.base_types.get(uuid) {
-            let name = format_ident!("{}", mapping.rust_id().unwrap_or(uuid));
+            let name = mapping.rust_id.clone();
             match (&mapping.args_num, args.len()) {
                 (BaseTypeArgs::None, 0) => name.to_token_stream(),
                 (BaseTypeArgs::Single, 1) => quote!(#name<#(#args),*>),
@@ -700,26 +704,29 @@ macro_rules! t {
     ($name:ident) => {
         (
             String::from(stringify!($name)),
+            {
+                let ident = format_ident!("{}", stringify!($name));
+                BaseTypeMapping {
+                    rust_id: ident.to_token_stream(),
+                    args_num: BaseTypeArgs::None,
+                }
+            },
+        )
+    };
+    ($name:ident => $($rust_toks:tt)*) => {
+        (
+            String::from(stringify!($name)),
             BaseTypeMapping {
-                rust_id: None,
+                rust_id: stringify!($($rust_toks)*).parse().unwrap(),
                 args_num: BaseTypeArgs::None,
             },
         )
     };
-    ($name:ident => $rust_name:ident) => {
+    ($name:ident < _ > => $($rust_toks:tt)*) => {
         (
             String::from(stringify!($name)),
             BaseTypeMapping {
-                rust_id: Some(String::from(stringify!($rust_name))),
-                args_num: BaseTypeArgs::None,
-            },
-        )
-    };
-    ($name:ident => $rust_name:ident < _ >) => {
-        (
-            String::from(stringify!($name)),
-            BaseTypeMapping {
-                rust_id: Some(String::from(stringify!($rust_name))),
+                rust_id: stringify!($($rust_toks)*).parse().unwrap(),
                 args_num: BaseTypeArgs::Single,
             },
         )
@@ -729,15 +736,16 @@ macro_rules! t {
 fn base_types() -> HashMap<String, BaseTypeMapping> {
     HashMap::from([
         t!(bool),
+        t!(unit => ()),
         t!(int => i32),
         t!(int32 => i32),
         t!(int64 => i64),
         t!(float => f32),
         t!(string => String),
-        t!(option => Option<_>),
-        t!(array => Vec<_>),
-        t!(list => Vec<_>),
-        t!(kimchi_backend_bigint_32_V1 => BigInt)
+        t!(option<_> => Option),
+        t!(array<_> => Vec),
+        t!(list<_> => Vec),
+        t!(kimchi_backend_bigint_32_V1 => BigInt),
     ])
 }
 
@@ -775,6 +783,8 @@ mod tests {
             assert_eq!(gen_ref("(Base string ())"), "String");
             assert_eq!(gen_ref("(Base int ())"), "i32");
             assert_eq!(gen_ref("(Base int32 ())"), "i32");
+            assert_eq!(gen_ref("(Base unit ())"), "()");
+            assert_eq!(gen_ref("(Base kimchi_backend_bigint_32_V1 ())"), "BigInt");
         }
 
         #[test]
@@ -874,6 +884,52 @@ mod tests {
         }
     }
 
+    mod others {
+        use rust_format::{Formatter, RustFmt};
+
+        use crate::{
+            gen::{ConfigBuilder, Generator},
+            shape::Expression,
+            xref::XRef,
+        };
+
+        fn gen_type(name: &str, expr: &str) -> String {
+            let expr: Expression = expr.parse().unwrap();
+            let binding = [(name, expr.clone())];
+            let xref = XRef::new(&binding).unwrap();
+            let ts = Generator::new(&xref, ConfigBuilder::default().build().unwrap())
+                .generate_type(None, &expr);
+            eprintln!("{ts}");
+            RustFmt::default().format_tokens(ts.into()).unwrap()
+        }
+
+        #[test]
+        fn preamble() {
+            let preamble = "pub type BigInt = [u8; 32];";
+            let expr = r#"(Top_app
+ ((gid 586) (loc src/lib/data_hash_lib/state_hash.ml:42:4)
+  (members ((t (() (Base kimchi_backend_bigint_32_V1 ()))))))
+ t ())"#;
+            let rust = r#"pub type BigInt = [u8; 32];
+pub type MyType = BigInt;
+"#;
+            let expr: Expression = expr.parse().unwrap();
+            let binding = [("MyType", expr.clone())];
+            let xref = XRef::new(&binding).unwrap();
+            let ts = Generator::new(
+                &xref,
+                ConfigBuilder::default()
+                    .preamble(preamble.parse().unwrap())
+                    .build()
+                    .unwrap(),
+            )
+            .generate("MyType");
+            eprintln!("{ts}");
+            let rust_act = RustFmt::default().format_tokens(ts.into()).unwrap();
+            assert_eq!(rust, rust_act);
+        }
+    }
+
     mod gen_type {
         use rust_format::{Formatter, RustFmt};
 
@@ -889,6 +945,7 @@ mod tests {
             let xref = XRef::new(&binding).unwrap();
             let ts = Generator::new(&xref, ConfigBuilder::default().build().unwrap())
                 .generate_type(None, &expr);
+            eprintln!("{ts}");
             RustFmt::default().format_tokens(ts.into()).unwrap()
         }
 
