@@ -191,7 +191,9 @@ impl<'a> Generator<'a> {
             Expression::Record(exprs) => self.generate_record(type_name, exprs),
             Expression::Variant(alts) => self.generate_variant(type_name, alts),
             Expression::Tuple(exprs) => self.generate_tuple(type_name, exprs),
-            Expression::Poly_variant(xxx) => gen_error!("TODO Poly_variant {xxx:?}"),
+            Expression::Poly_variant((loc, constrs)) => {
+                self.generate_poly_variant(type_name, loc, constrs)
+            }
             Expression::Var((loc, vid)) => self.generate_var(type_name, loc, vid),
             Expression::Rec_app(tid, args) => self.generate_rec_app(type_name, tid, args),
             Expression::Top_app(group, tid, args) => {
@@ -317,6 +319,42 @@ impl<'a> Generator<'a> {
             .map(|(i, expr)| self.type_reference(Some(&format!("{type_name}{i}")), expr));
         quote! {
             pub type #name = (#(#exprs,)*);
+        }
+    }
+
+    fn generate_poly_variant(
+        &mut self,
+        type_name: Option<&str>,
+        _loc: &Location,
+        constrs: &'a [PolyConstr],
+    ) -> TokenStream {
+        let type_name =
+            some_or_gen_error!(type_name, Error::Assert(format!("No name for tuple type")));
+        let name = format_ident!("{type_name}");
+        let constrs = constrs
+            .iter()
+            .map(|constr| self.generate_poly_constr(type_name, constr));
+        quote! {
+            enum #name {
+                #(#constrs,)*
+            }
+        }
+    }
+
+    fn generate_poly_constr(&mut self, type_name: &str, constr: &'a PolyConstr) -> TokenStream {
+        match constr {
+            PolyConstr::Constr((name, opt_expr)) => {
+                let constr_name = format_ident!("{name}");
+                if let Some(expr) = opt_expr {
+                    let expr = self.type_reference(Some(&format!("{type_name}{name}")), expr);
+                    quote!(#constr_name(#expr))
+                } else {
+                    quote!(#constr_name)
+                }
+            }
+            PolyConstr::Inherit(_) => {
+                Error::Assert(format!("poly constr inherit is not implemented")).into()
+            }
         }
     }
 
