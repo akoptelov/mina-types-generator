@@ -228,7 +228,7 @@ impl<'a> Generator<'a> {
         let name = format_ident!("{type_name}");
         let fields = fields
             .iter()
-            .map(|(field, expr)| self.generate_field(type_name, field, expr));
+            .map(|(field, expr)| self.generate_field(type_name, field, expr, true));
         quote! {
             pub struct #name {
                 #(#fields,)*
@@ -241,6 +241,7 @@ impl<'a> Generator<'a> {
         type_name: &str,
         field: &str,
         expr: &'a Expression,
+        make_public: bool,
     ) -> TokenStream {
         let field_name = format_ident!("{field}");
         let field_type = self.type_reference(
@@ -250,8 +251,9 @@ impl<'a> Generator<'a> {
             )),
             expr,
         );
+        let p = if make_public { quote!(pub) } else { quote!() };
         quote! {
-            pub #field_name: #field_type
+            #p #field_name: #field_type
         }
     }
 
@@ -287,6 +289,15 @@ impl<'a> Generator<'a> {
         let alt_name = format_ident!("{alt}");
         if exprs.is_empty() {
             quote!(#alt_name)
+        } else if let Some((Expression::Record(fields), [])) = exprs.split_first() {
+            let fields = fields
+                .iter()
+                .map(|(name, expr)| self.generate_field(&alt, name, expr, false));
+            quote! {
+                #alt_name {
+                    #(#fields,)*
+                }
+            }
         } else {
             let exprs = exprs
                 .iter()
@@ -925,6 +936,28 @@ mod tests {
             let rust = r#"pub enum MyEnum {
     At(i32),
     Completed,
+}
+"#;
+            assert_eq!(gen_type("MyEnum", src), rust);
+        }
+
+        #[test]
+        fn variant_with_fields() {
+            let src = r#"(Top_app
+ ((gid 630) (loc src/lib/mina_base/stake_delegation.ml:9:4)
+  (members
+   ((t
+     (()
+      (Variant
+       ((Set_delegate
+         ((Record
+           ((delegator
+             (Base int ()))
+            (new_delegate
+             (Base int ())))))))))))))
+ t ())"#;
+            let rust = r#"pub enum MyEnum {
+    SetDelegate { delegator: i32, new_delegate: i32 },
 }
 "#;
             assert_eq!(gen_type("MyEnum", src), rust);
