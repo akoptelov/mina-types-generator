@@ -1,4 +1,4 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 
 use derive_builder::Builder;
 use proc_macro2::TokenStream;
@@ -75,6 +75,9 @@ pub struct Config {
     /// Generate comments.
     #[builder(default)]
     generate_comments: bool,
+    /// Add blank line markers between types.
+    #[builder(default)]
+    blank_lines: bool,
     /// Git repository prefix
     #[builder(setter(into, strip_option), default)]
     git_prefix: Option<String>,
@@ -157,6 +160,9 @@ impl<'a> Generator<'a> {
     {
         let mut ts = types.into_iter().fold(TokenStream::new(), |mut ts, name| {
             ts.extend(self.generate_for_name(name.as_ref()));
+            if self.config.blank_lines {
+                ts.extend(quote!(_blank_!();));
+            }
             ts
         });
         ts.extend(std::mem::take(&mut self.aux_types));
@@ -170,17 +176,17 @@ impl<'a> Generator<'a> {
     }
 
     fn generate_for_name(&mut self, name: &str) -> TokenStream {
+        eprintln!("generating for {name}...");
         self.xref.expr_for_name(name).map_or_else(
             || Error::TypeNotFound(name.to_string()).into(),
             |expr| self.generate_type(None, expr),
         )
     }
 
-    fn generate_aux_type(&mut self, gid: &Gid) {
-        let ts = self.xref.expr_for_gid(*gid).map_or_else(
-            || Error::Assert(format!("No type for gid `{gid}`")).into(),
-            |(expr, _)| self.generate_type(None, expr),
-        );
+    fn add_aux_type(&mut self, ts: TokenStream) {
+        if self.config.blank_lines {
+            self.aux_types.extend(quote!(_blank_!();));
+        }
         self.aux_types.extend(ts);
     }
 
@@ -378,31 +384,36 @@ impl<'a> Generator<'a> {
         _tid: &str,
         args: &'a [Expression],
     ) -> TokenStream {
-        let Group {
-            gid,
-            loc: _,
-            members,
-        } = group;
-        if let Some(TypeStatus::Generated(_)) = self.name_mapping.get(gid) {
-            return quote!();
+        let Group { gid, loc, members } = group;
+        let named = !self.xref.is_anonymous(*gid);
+        if named {
+            if let Some(TypeStatus::Generated(_)) = self.name_mapping.get(gid) {
+                return quote!();
+            }
         }
         let type_name = self.sanitize_name(some_or_gen_error!(
             self.group_name(gid).or(type_name),
             Error::UnknownGroupName(gid)
         ));
+        self.name_mapping
+            .insert(gid, TypeStatus::Generated(type_name.clone()));
 
         let (tid, (vids, expr)) = some_or_gen_error!(members.first(), Error::EmptyGroup(&gid));
         let venv = ok_or_gen_error!(self.new_venv(&group.gid, vids, args, Some(&type_name)));
         let tenv = self.new_tenv(gid, tid, Some(&type_name));
 
-        let res = self.generate_type(Some(&type_name), expr);
+        let mut expr = self.generate_type(Some(&type_name), expr);
+        if !expr.is_empty() {
+            let mut comment = self.generate_doc_comment(gid, loc);
+            comment.extend(expr);
+            expr = comment;
+        }
 
         self.tenv = tenv;
         self.venv = venv;
 
         quote! {
-            //#comment
-            #res
+            #expr
         }
     }
 
@@ -415,14 +426,16 @@ impl<'a> Generator<'a> {
     }
 
     fn generate_doc_comment(&self, gid: &Gid, loc: &str) -> TokenStream {
+        if !self.config.generate_comments {
+            return quote!();
+        }
         let git_loc = self.git_loc(loc);
         let loc = git_loc.as_ref().map(String::as_str).unwrap_or(loc);
-        let name = self
-            .xref
-            .for_gid(*gid)
-            .and_then(|(_, name)| name)
-            .map_or_else(|| format!("gid {gid}"), String::from);
-        let doc = format!(" {name}\n {loc}");
+        let doc = if let Some(name) = self.xref.for_gid(*gid).and_then(|(_, name)| name) {
+            format!(" Origin: {name}\n Location: {loc}")
+        } else {
+            format!(" Location: {loc}")
+        };
         quote! {
             #[doc = #doc]
         }
@@ -556,7 +569,7 @@ impl<'a> Generator<'a> {
                     self.name_mapping
                         .insert(gid, TypeStatus::Pending(type_name.clone()));
                     let ts = self.generate_top_app(Some(&type_name), group, loc, args);
-                    self.aux_types.extend(ts);
+                    self.add_aux_type(ts);
                     type_name
                 }
             };
