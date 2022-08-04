@@ -150,36 +150,30 @@ impl<'a> Generator<'a> {
         }
     }
 
-    // pub fn generate_types<T, I, O>(&mut self, types: I) -> TokenStream
-    // where
-    //     T: 'a + AsRef<str>,
-    //     I: IntoIterator<Item = T>,
-    //     O: Write,
-    // {
-    //     for ty in types {
-    //         let ty = ty.as_ref();
-    //         let ts = self.generate(ty);
-    //         let config = Config::new_str().post_proc(PostProcess::ReplaceMarkersAndDocBlocks);
-    //         let res = RustFmt::from_config(config)
-    //             .format_tokens(ts.into())
-    //             .unwrap();
-    //         out.write_all(res.as_bytes())?;
-    //         // out.write_all(
-    //         //     ts.to_string().as_bytes(), // res
-    //         // )?;
-    //         //
-    //     }
-    //     Ok(())
-    // }
-
-    pub fn generate(&mut self, name: &str) -> TokenStream {
-        let expr = some_or_gen_error!(
-            self.xref.expr_for_name(name),
-            Error::TypeNotFound(name.to_string())
-        );
-        let mut ts = self.generate_type(None, expr);
+    pub fn generate_types<T, I, O>(&mut self, types: I) -> TokenStream
+    where
+        T: 'a + AsRef<str>,
+        I: IntoIterator<Item = T>,
+    {
+        let mut ts = types.into_iter().fold(TokenStream::new(), |mut ts, name| {
+            ts.extend(self.generate_for_name(name.as_ref()));
+            ts
+        });
         ts.extend(std::mem::take(&mut self.aux_types));
         ts
+    }
+
+    pub fn generate(&mut self, name: &str) -> TokenStream {
+        let mut ts = self.generate_for_name(name);
+        ts.extend(std::mem::take(&mut self.aux_types));
+        ts
+    }
+
+    fn generate_for_name(&mut self, name: &str) -> TokenStream {
+        self.xref.expr_for_name(name).map_or_else(
+            || Error::TypeNotFound(name.to_string()).into(),
+            |expr| self.generate_type(None, expr),
+        )
     }
 
     fn generate_aux_type(&mut self, gid: &Gid) {
