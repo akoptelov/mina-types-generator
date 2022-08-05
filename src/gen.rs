@@ -89,6 +89,11 @@ pub struct Config {
     #[serde(with = "token_stream")]
     preamble: TokenStream,
 
+    /// Type preamble, like attributes.
+    #[builder(default)]
+    #[serde(with = "token_stream")]
+    type_preamble: TokenStream,
+
     /// Base types mapping.
     #[builder(default = "base_types()")]
     base_types: HashMap<String, BaseTypeMapping>,
@@ -257,6 +262,7 @@ impl<'a> Generator<'a> {
     ) -> TokenStream {
         let type_name =
             some_or_gen_error!(type_name, Error::Assert(format!("No name for base type")));
+        let preamble = self.config.type_preamble.clone();
         let args = args
             .iter()
             .enumerate()
@@ -264,7 +270,10 @@ impl<'a> Generator<'a> {
             .collect::<Vec<_>>();
         let base = self.base_type_mapping(uuid, &args);
         let name = format_ident!("{type_name}");
-        quote!(pub type #name = #base;)
+        quote! {
+            #preamble
+            pub struct #name(pub #base);
+        }
     }
 
     fn generate_record(
@@ -275,10 +284,12 @@ impl<'a> Generator<'a> {
         let type_name =
             some_or_gen_error!(type_name, Error::Assert(format!("No name for record type")));
         let name = format_ident!("{type_name}");
+        let preamble = self.config.type_preamble.clone();
         let fields = fields
             .iter()
             .map(|(field, expr)| self.generate_field(type_name, field, expr, true));
         quote! {
+            #preamble
             pub struct #name {
                 #(#fields,)*
             }
@@ -316,10 +327,12 @@ impl<'a> Generator<'a> {
             Error::Assert(format!("No name for variant type"))
         );
         let name = format_ident!("{type_name}");
+        let preamble = self.config.type_preamble.clone();
         let alts = alts
             .iter()
             .map(|(alt, exprs)| self.generate_alternative(type_name, alt, exprs));
         quote! {
+            #preamble
             pub enum #name {
                 #(
                     #alts,
@@ -360,12 +373,14 @@ impl<'a> Generator<'a> {
         let type_name =
             some_or_gen_error!(type_name, Error::Assert(format!("No name for tuple type")));
         let name = format_ident!("{type_name}");
+        let preamble = self.config.type_preamble.clone();
         let exprs = exprs
             .iter()
             .enumerate()
             .map(|(i, expr)| self.type_reference(Some(&format!("{type_name}{i}")), expr));
         quote! {
-            pub type #name = (#(#exprs,)*);
+            #preamble
+            pub struct #name(#(pub #exprs,)*);
         }
     }
 
@@ -378,10 +393,12 @@ impl<'a> Generator<'a> {
         let type_name =
             some_or_gen_error!(type_name, Error::Assert(format!("No name for tuple type")));
         let name = format_ident!("{type_name}");
+        let preamble = self.config.type_preamble.clone();
         let constrs = constrs
             .iter()
             .map(|constr| self.generate_poly_constr(type_name, constr));
         quote! {
+            #preamble
             pub enum #name {
                 #(#constrs,)*
             }
@@ -451,9 +468,11 @@ impl<'a> Generator<'a> {
             let type_name = format_ident!("{type_name}");
             let type_ref = self.type_reference(None, expr);
             let comment = self.generate_doc_comment(gid, loc);
+            let preamble = self.config.type_preamble.clone();
             quote! {
                 #comment
-                pub type #type_name = #type_ref;
+                #preamble
+                pub struct #type_name(pub #type_ref);
             }
         } else {
             let expr = self.generate_type(Some(&type_name), expr);
@@ -943,7 +962,7 @@ mod tests {
   (members ((t (() (Base kimchi_backend_bigint_32_V1 ()))))))
  t ())"#;
             let rust = r#"pub type BigInt = [u8; 32];
-pub type MyType = BigInt;
+pub struct MyType(pub BigInt);
 "#;
             let expr: Expression = expr.parse().unwrap();
             let binding = [("MyType", expr.clone())];
@@ -987,7 +1006,7 @@ pub type MyType = BigInt;
              ((gid 83) (loc src/string.ml:44:6)
               (members ((t (() (Base string ()))))))
              t ())"#;
-            let rust = "pub type MyString = String;\n";
+            let rust = "pub struct MyString(pub String);\n";
             assert_eq!(gen_type("MyString", src), rust);
         }
 
@@ -1154,7 +1173,7 @@ pub type MyType = BigInt;
                t ()))))))
          string ()))))))))
  t ())"#;
-            let rust = r#"pub type MyTuple = (i32, String);
+            let rust = r#"pub struct MyTuple(pub i32, pub String);
 "#;
             assert_eq!(gen_type("MyTuple", src), rust);
         }
@@ -1188,7 +1207,7 @@ pub type MyType = BigInt;
                t ()))))))
          string ()))))))))
  t ())"#;
-            let rust = r#"pub type MyTuple = (i32, String);
+            let rust = r#"pub struct MyTuple(pub i32, pub String);
 "#;
             assert_eq!(gen_type("My.tuple.t", src), rust);
         }
@@ -1271,7 +1290,7 @@ pub type MyType = BigInt;
        ((Predicate ()) (Source_not_present ()) (Receiver_not_present ())
         (Invalid_fee_excess ()))))))))
  t ())"#;
-            let rust = r#"pub type Collection = Vec<Vec<Item>>;
+            let rust = r#"pub struct Collection(pub Vec<Vec<Item>>);
 pub enum Item {
     Predicate,
     SourceNotPresent,

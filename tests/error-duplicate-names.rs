@@ -32,8 +32,8 @@ const TWO: &str = r#"(Top_app
              t ()))))))
        string ()))))))
  t ())"#;
-const RUST: &str = r#"pub type MinaBaseStagedLedgerHashAuxHashStableV1 = String;
-pub type MinaBaseStagedLedgerHashPendingCoinbaseAuxStableV1 = String;
+const RUST: &str = r#"pub struct MinaBaseStagedLedgerHashAuxHashStableV1(pub String);
+pub struct MinaBaseStagedLedgerHashPendingCoinbaseAuxStableV1(pub String);
 "#;
 
 #[test]
