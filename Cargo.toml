@@ -6,6 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+anyhow = "1.0.58"
+clap = { version = "3.2.15", features = ["derive"] }
 derive-new = "0.5.9"
 derive_builder = "0.11.2"
 derive_more = "0.99.17"
@@ -13,10 +15,8 @@ proc-macro2 = "1.0.40"
 quote = "1.0.20"
 rsexp = { git = "https://github.com/name-placeholder/rsexp" }
 rsexp-derive = { git = "https://github.com/name-placeholder/rsexp" }
+rust-format = { version = "0.3.4", features = ["token_stream", "post_process"] }
 serde = { version = "1.0.142", features = ["derive"] }
 syn = "1.0.98"
 thiserror = "1.0.31"
-
-[dev-dependencies]
-rust-format = { version = "0.3.4", features = ["token_stream", "post_process"] }
 toml = "0.5.9"

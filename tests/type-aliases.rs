@@ -32,9 +32,9 @@ const UINT64: &str = r#"(Top_app
  ((gid 125) (loc src/int64.ml:6:6) (members ((t (() (Base int64 ())))))) t
  ())"#;
 
-const RUST: &str = r#"pub type Balance = Amount;
+const RUST: &str = r#"pub struct Balance(pub Amount);
 pub struct Uint64(pub i64);
-pub struct Amount(Uint64);
+pub struct Amount(pub Uint64);
 "#;
 
 #[test]

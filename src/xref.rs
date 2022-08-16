@@ -57,6 +57,17 @@ impl<'a> XRef<'a> {
         let mut gid_name = HashMap::new();
         for ty in types {
             if let Expression::Top_app(group, ..) = ty.shape() {
+                // if let Some(expr) = group
+                //     .members
+                //     .first()
+                //     .and_then(|(_, (_, expr))| Self::versioned_type(expr))
+                // {
+                //     if let Expression::Top_app(group, ..) = expr {
+                //         name_map.insert(ty.name(), expr);
+                //         gid_name.insert(group.gid, ty.name());
+                //         gid_map.insert(group.gid, (expr, Some(ty.name())));
+                //     }
+                // }
                 name_map.insert(ty.name(), ty.shape());
                 gid_name.insert(group.gid, ty.name());
                 gid_map.insert(group.gid, (ty.shape(), Some(ty.name())));
@@ -67,36 +78,6 @@ impl<'a> XRef<'a> {
                 )));
             }
         }
-
-        // struct GidVisitor<'a, 'b: 'a> {
-        //     gid_name: HashMap<Gid, &'b str>,
-        //     gid_map: &'a mut HashMap<Gid, (&'b Expression, Option<&'b str>)>,
-        // }
-
-        // impl<'a, 'b> Visitor<'b> for GidVisitor<'a, 'b> {
-        //     fn apply(&mut self, expr: &'b Expression) {
-        //         if let Expression::Top_app(group, _, args) = expr {
-        //             if self.gid_map.contains_key(&group.gid) {
-        //                 args.iter().for_each(|arg| self.apply(arg))
-        //             } else {
-        //                 let name = self.gid_name.get(&group.gid).map(|n| *n);
-        //                 self.gid_map.insert(group.gid, (expr, name));
-        //                 expr.visit(self)
-        //             }
-        //         } else {
-        //             expr.visit(self)
-        //         }
-        //     }
-        // }
-
-        // let mut visitor = GidVisitor {
-        //     gid_name,
-        //     gid_map: &mut gid_map,
-        // };
-
-        // name_map
-        //     .iter()
-        //     .for_each(|(_name, group)| group.visit(&mut visitor));
 
         let result = Self { gid_map, name_map };
         Ok(result)
@@ -138,8 +119,8 @@ impl<'a> XRef<'a> {
     pub(crate) fn can_inline_expression(&self, expr: &Expression) -> bool {
         match expr {
             Expression::Base(_, _) => true,
-            Expression::Tuple(_) => true,
-            Expression::Top_app(group, _, _args) => self.can_inline_group(group),
+            //Expression::Tuple(_) => true,
+            //Expression::Top_app(group, _, _args) => self.can_inline_group(group),
             _ => false,
         }
     }

@@ -103,10 +103,11 @@ const RUST: &str = r#"pub enum Type {
         new_delegate: SetDelegateDelegator,
     },
 }
-pub struct SetDelegateDelegator {
-    pub x: BigInt,
-    pub is_odd: bool,
+pub struct SetDelegateDelegatorPoly<Field, Boolean> {
+    pub x: Field,
+    pub is_odd: Boolean,
 }
+pub struct SetDelegateDelegator(pub SetDelegateDelegatorPoly<BigInt, bool>);
 "#;
 
 #[test]
