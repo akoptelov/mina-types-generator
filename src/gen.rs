@@ -576,9 +576,8 @@ impl<'a> Generator<'a> {
         let type_name = format_ident!("{type_name}");
         let params = self.params(vids);
         quote! {
-            version!(#type_ref, 1);
             #comment
-            pub type #type_name #params = Versioned<#type_ref>;
+            pub type #type_name #params = Versioned<#type_ref, 1>;
         }
     }
 
@@ -795,7 +794,7 @@ impl<'a> Generator<'a> {
 
         let type_name = match self.name_mapping.get(gid) {
             Some(TypeStatus::Generated(name)) | Some(TypeStatus::Pending(name)) => {
-                println!("{gid} => {name}");
+                //println!("{gid} => {name}");
                 name.to_string()
             }
             None => {
