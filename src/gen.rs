@@ -97,6 +97,16 @@ pub struct Config {
     #[serde(with = "token_stream")]
     type_preamble: TokenStream,
 
+    /// Versioned type, to be used to mark a type with a version.
+    #[builder(default)]
+    #[serde(with = "token_stream")]
+    versioned_type: TokenStream,
+
+    /// Phantom type, to be used with unused type parameters.
+    #[builder(default)]
+    #[serde(with = "token_stream")]
+    phantom_type: TokenStream,
+
     /// Base types mapping.
     #[builder(default = "base_types()")]
     base_types: HashMap<String, BaseTypeMapping>,
@@ -390,8 +400,9 @@ impl<'a> Generator<'a> {
     fn generate_phantom_field(&self, i: usize, vid: &Vid) -> TokenStream {
         let field_name = format_ident!("_phantom_data_{}", i.to_string());
         let type_name = format_ident!("{}", Self::sanitize_name(vid));
+        let phantom_type = self.config.phantom_type.clone();
         quote! {
-            #field_name: PhantomData< #type_name >
+            #field_name: #phantom_type< #type_name >
         }
     }
 
@@ -599,9 +610,10 @@ impl<'a> Generator<'a> {
         let type_ref = self.type_reference(Some(&format!("{type_name}V{version}")), ver_expr);
         let type_name = format_ident!("{type_name}");
         let params = self.params(vids);
+        let versioned = self.config.versioned_type.clone();
         quote! {
             #comment
-            pub type #type_name #params = Versioned<#type_ref, #version>;
+            pub type #type_name #params = #versioned<#type_ref, #version>;
         }
     }
 
