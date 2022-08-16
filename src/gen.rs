@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use derive_builder::Builder;
 use proc_macro2::TokenStream;
@@ -164,7 +164,7 @@ pub struct Generator<'a> {
     name_mapping: HashMap<&'a Gid, TypeStatus>,
 
     /// Artifical names already in use.
-    used_names: HashMap<String, u8>,
+    used_names: HashMap<String, HashSet<&'a Gid>>,
 
     /// Additional types referenced by main ones.
     aux_types: TokenStream,
@@ -276,7 +276,7 @@ impl<'a> Generator<'a> {
         }
         let params = params
             .iter()
-            .map(|vid| format_ident!("{}", self.sanitize_name(vid)));
+            .map(|vid| format_ident!("{}", Self::sanitize_name(vid)));
         Some(quote! {
             < #(#params),* >
         })
@@ -377,7 +377,7 @@ impl<'a> Generator<'a> {
         let field_type = self.type_reference(
             Some(&format!(
                 "{type_name}{field}",
-                field = self.sanitize_name(field)
+                field = Self::sanitize_name(field)
             )),
             expr,
         );
@@ -389,7 +389,7 @@ impl<'a> Generator<'a> {
 
     fn generate_phantom_field(&self, i: usize, vid: &Vid) -> TokenStream {
         let field_name = format_ident!("_phantom_data_{}", i.to_string());
-        let type_name = format_ident!("{}", self.sanitize_name(vid));
+        let type_name = format_ident!("{}", Self::sanitize_name(vid));
         quote! {
             #field_name: PhantomData< #type_name >
         }
@@ -427,7 +427,7 @@ impl<'a> Generator<'a> {
         alt: &str,
         exprs: &'a [Expression],
     ) -> TokenStream {
-        let alt = self.sanitize_name(alt);
+        let alt = Self::sanitize_name(alt);
         let alt_name = format_ident!("{alt}");
         if exprs.is_empty() {
             quote!(#alt_name)
@@ -531,7 +531,11 @@ impl<'a> Generator<'a> {
         _tid: &str,
         args: &'a [Expression],
     ) -> TokenStream {
-        let Group { gid, loc: _, members } = group;
+        let Group {
+            gid,
+            loc: _,
+            members,
+        } = group;
         let named = !self.xref.is_anonymous(*gid);
         if named {
             if let Some(TypeStatus::Generated(_)) = self.name_mapping.get(gid) {
@@ -539,30 +543,37 @@ impl<'a> Generator<'a> {
             }
         }
 
-        let type_name = if named {
-            self.sanitize_name(some_or_gen_error!(
-                self.group_name(gid).or(type_name),
-                Error::UnknownGroupName(gid)
-            ))
-        } else {
-            some_or_gen_error!(type_name, Error::UnknownGroupName(gid)).to_string()
-        };
-
-        self.name_mapping
-            .insert(gid, TypeStatus::Generated(type_name.clone()));
-
         let (tid, (_vids, expr)) = some_or_gen_error!(members.first(), Error::EmptyGroup(&gid));
 
         if let Some(ver_expr) = self.versioned_type(expr) {
-            self.generate_versioned_top_app(&type_name, group, tid, args, ver_expr)
+            self.generate_versioned_top_app(type_name, named, group, tid, args, ver_expr)
         } else {
-            self.generate_plain_top_app(&type_name, group, tid, args)
+            self.generate_plain_top_app(type_name, group, tid, args)
         }
     }
 
+    fn get_versioned_type_name(name: &str) -> std::result::Result<(String, i32), String> {
+        if let Some(name) = name.strip_suffix(".t") {
+            if let Some((name, version)) = name.rsplit_once(".V") {
+                if let Ok(version) = version.parse::<i32>() {
+                    return Ok((Self::sanitize_name(name), version));
+                }
+            }
+        }
+        return Err(Self::sanitize_name(&format!("{name}IsNotVersioned")));
+    }
+
+    // fn get_named_type_name(name: &str) -> std::result::Result<String, String> {
+    //     if let Some(name) = name.strip_suffix(".t") {
+    //         return Ok(Self::sanitize_name(name));
+    //     }
+    //     return Err(Self::sanitize_name(&format!("{name}IsNotVersioned")))
+    // }
+
     fn generate_versioned_top_app(
         &mut self,
-        type_name: &str,
+        type_name: Option<&str>,
+        named: bool,
         group: &'a Group,
         _tid: &str,
         _args: &'a [Expression],
@@ -571,25 +582,43 @@ impl<'a> Generator<'a> {
         let Group { gid, loc, members } = group;
         let (_tid, (vids, _expr)) = some_or_gen_error!(members.first(), Error::EmptyGroup(&gid));
 
+        let (type_name, version) = if named {
+            let name = some_or_gen_error!(self.group_name(gid), Error::UnknownGroupName(gid));
+            Self::get_versioned_type_name(name).unwrap_or_else(|e| (e, 1))
+        } else {
+            (
+                some_or_gen_error!(type_name, Error::UnknownGroupName(gid)).to_string(),
+                1,
+            )
+        };
+
+        self.name_mapping
+            .insert(gid, TypeStatus::Generated(type_name.clone()));
+
         let comment = self.generate_doc_comment(gid, loc);
-        let type_ref = self.type_reference(Some(&format!("{type_name}Ver")), ver_expr);
+        let type_ref = self.type_reference(Some(&format!("{type_name}V{version}")), ver_expr);
         let type_name = format_ident!("{type_name}");
         let params = self.params(vids);
         quote! {
             #comment
-            pub type #type_name #params = Versioned<#type_ref, 1>;
+            pub type #type_name #params = Versioned<#type_ref, #version>;
         }
     }
 
     fn generate_plain_top_app(
         &mut self,
-        type_name: &str,
+        type_name: Option<&str>,
         group: &'a Group,
         _tid: &str,
         _args: &'a [Expression],
     ) -> TokenStream {
         let Group { gid, loc, members } = group;
         let (tid, (vids, expr)) = some_or_gen_error!(members.first(), Error::EmptyGroup(&gid));
+
+        let type_name = some_or_gen_error!(type_name, Error::UnknownGroupName(gid)).to_string();
+
+        self.name_mapping
+            .insert(gid, TypeStatus::Generated(type_name.clone()));
 
         // let venv = ok_or_gen_error!(self.new_venv(&group.gid, vids, args, Some(&type_name)));
         let tenv = self.new_tenv(gid, tid, Some(&type_name));
@@ -623,9 +652,9 @@ impl<'a> Generator<'a> {
         if let Expression::Record(fields) = expr {
             if fields.len() == 2 && &fields[0].0 == "version" && &fields[1].0 == "t" {
                 let expr = &fields[1].1;
-                if let Expression::Top_app(group, _, _) = expr {
+                if let Expression::Top_app(group, _, args) = expr {
                     if let Some((_, (_, inner_expr))) = group.members.first() {
-                        if matches!(inner_expr, Expression::Top_app(inner_group, _, _) if &group.loc == &inner_group.loc)
+                        if matches!(inner_expr, Expression::Top_app(inner_group, _, inner_args) if &group.loc == &inner_group.loc && args == inner_args)
                         {
                             return Some(inner_expr);
                         }
@@ -751,9 +780,7 @@ impl<'a> Generator<'a> {
         self.venv
             .get(vid)
             .cloned()
-            .unwrap_or_else(|| format_ident!("{}", self.sanitize_name(vid)).to_token_stream())
-        //some_or_gen_error!(self.venv.get(vid).cloned(), Error::UnresolvedTypeVar(vid))
-        //format_ident!("{}", self.sanitize_name(vid)).to_token_stream()
+            .unwrap_or_else(|| format_ident!("{}", Self::sanitize_name(vid)).to_token_stream())
     }
 
     fn type_reference_rec_app(
@@ -798,16 +825,25 @@ impl<'a> Generator<'a> {
                 name.to_string()
             }
             None => {
-                let mut type_name = self.sanitize_name(some_or_gen_error!(
-                    self.group_name(gid).or(name_hint),
-                    Error::UnknownGroupName(gid)
-                ));
-                if let Some(existing) = self.used_names.get_mut(&type_name) {
-                    type_name = format!("{type_name}Dup{existing}");
-                    *existing += 1;
+                let type_name = if let Some((_, Some(name))) = self.xref.for_gid(*gid) {
+                    Self::get_versioned_type_name(name)
+                        .map_or_else(|e| e, |(name, _)| format!("{name}"))
                 } else {
-                    self.used_names.insert(type_name.clone(), 0);
-                }
+                    let mut name = Self::sanitize_name(some_or_gen_error!(
+                        self.group_name(gid).or(name_hint),
+                        Error::UnknownGroupName(gid)
+                    ));
+                    if let Some(existing) = self.used_names.get_mut(&name) {
+                        //println!("{name}: {existing:?}");
+                        if !existing.contains(gid) {
+                            name = format!("{name}Dup{}", existing.len());
+                            existing.insert(gid);
+                        }
+                    } else {
+                        self.used_names.insert(name.clone(), HashSet::from([gid]));
+                    }
+                    name
+                };
                 self.name_mapping
                     .insert(gid, TypeStatus::Pending(type_name.clone()));
                 let ts = self.generate_top_app(Some(&type_name), group, loc, args);
@@ -882,8 +918,7 @@ impl<'a> Generator<'a> {
         std::mem::replace(&mut self.tenv, tenv)
     }
 
-    fn sanitize_name(&self, name: &str) -> String {
-        let name = name.strip_suffix(".t").unwrap_or(name);
+    fn sanitize_name(name: &str) -> String {
         let mut san_name = String::new();
         let mut to_upper = true;
         for ch in name.chars() {
@@ -979,6 +1014,20 @@ fn base_types() -> HashMap<String, BaseTypeMapping> {
 
 #[cfg(test)]
 mod tests {
+
+    mod names {
+        #[test]
+        fn versioned_type_name() {
+            assert_eq!(
+                super::super::Generator::get_versioned_type_name("Mod.Stable.V1.t"),
+                Ok((String::from("ModStable"), 1))
+            );
+            assert_eq!(
+                super::super::Generator::get_versioned_type_name("Mod.Stable.V1"),
+                Err(String::from("ModStableV1IsNotVersioned"))
+            );
+        }
+    }
 
     mod type_ref {
         use crate::{
