@@ -97,6 +97,11 @@ pub struct Config {
     #[serde(with = "token_stream")]
     type_preamble: TokenStream,
 
+    /// Polymorphic variant preamble.
+    #[builder(default)]
+    #[serde(with = "token_stream")]
+    poly_var_preamble: TokenStream,
+
     /// Versioned type, to be used to mark a type with a version.
     #[builder(default)]
     #[serde(with = "token_stream")]
@@ -492,12 +497,14 @@ impl<'a> Generator<'a> {
             some_or_gen_error!(type_name, Error::Assert(format!("No name for tuple type")));
         let name = format_ident!("{type_name}");
         let preamble = self.config.type_preamble.clone();
+        let poly_preamble = self.config.poly_var_preamble.clone();
         let params = self.params(params);
         let constrs = constrs
             .iter()
             .map(|constr| self.generate_poly_constr(type_name, constr));
         quote! {
             #preamble
+            #poly_preamble
             pub enum #name #params {
                 #(#constrs,)*
             }
