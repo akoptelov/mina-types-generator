@@ -572,9 +572,9 @@ impl<'a> Generator<'a> {
 
     fn get_versioned_type_name(name: &str) -> std::result::Result<(String, i32), String> {
         if let Some(name) = name.strip_suffix(".t") {
-            if let Some((name, version)) = name.rsplit_once(".V") {
+            if let Some((_, version)) = name.rsplit_once(".V") {
                 if let Ok(version) = version.parse::<i32>() {
-                    return Ok((Self::sanitize_name(name), version));
+                    return Ok((Self::sanitize_name(&format!("{name}.Binable")), version));
                 }
             }
         }
@@ -939,6 +939,9 @@ impl<'a> Generator<'a> {
 
     fn sanitize_name(name: &str) -> String {
         let mut san_name = String::new();
+        if matches!(name.chars().next(), Some(first) if first.is_numeric()) {
+            san_name.push('_');
+        }
         let mut to_upper = true;
         for ch in name.chars() {
             if ch.is_alphanumeric() {
@@ -965,7 +968,7 @@ impl<'a> Generator<'a> {
                 _ => gen_error!("Unexpected number of aguments to base type {uuid}"),
             }
         } else {
-            let name = format_ident!("{}", uuid);
+            let name = format_ident!("{}", Self::sanitize_name(uuid));
             if args.is_empty() {
                 quote!(#name)
             } else {
