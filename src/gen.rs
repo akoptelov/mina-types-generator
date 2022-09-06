@@ -84,32 +84,29 @@ pub struct Config {
     #[builder(setter(into, strip_option), default)]
     git_prefix: Option<String>,
 
-    /// Wrap internal types into specific generic
-    wrap_internal_types: bool,
-
     /// Rust file preamble.
     #[builder(default)]
-    #[serde(with = "token_stream")]
+    #[serde(with = "token_stream", default)]
     preamble: TokenStream,
 
     /// Type preamble, like attributes.
     #[builder(default)]
-    #[serde(with = "token_stream")]
+    #[serde(with = "token_stream", default)]
     type_preamble: TokenStream,
 
     /// Polymorphic variant preamble.
     #[builder(default)]
-    #[serde(with = "token_stream")]
+    #[serde(with = "token_stream", default)]
     poly_var_preamble: TokenStream,
 
     /// Versioned type, to be used to mark a type with a version.
     #[builder(default)]
-    #[serde(with = "token_stream")]
+    #[serde(with = "token_stream", default)]
     versioned_type: TokenStream,
 
     /// Phantom type, to be used with unused type parameters.
     #[builder(default)]
-    #[serde(with = "token_stream")]
+    #[serde(with = "token_stream", default)]
     phantom_type: TokenStream,
 
     /// Base types mapping.
@@ -149,6 +146,61 @@ mod token_stream {
         }
 
         deserializer.deserialize_str(V)
+    }
+}
+
+mod token_stream_opt {
+    use proc_macro2::TokenStream;
+    use serde::{de::Visitor, Deserializer, Serializer};
+
+    pub fn serialize<S>(ts: &Option<TokenStream>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        if let Some(ts) = ts.as_ref() {
+            super::token_stream::serialize(ts, serializer)
+        } else {
+            serializer.serialize_none()
+        }
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<TokenStream>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct V;
+        impl<'de> Visitor<'de> for V {
+            type Value = Option<TokenStream>;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("Rust token stream")
+            }
+
+            fn visit_none<E>(self) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(None)
+            }
+
+            fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+            where
+                D: Deserializer<'de>,
+            {
+                deserializer.deserialize_str(self)
+            }
+
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                v.parse()
+                    .map_err(|e| E::custom(format!("lexer error {e}")))
+                    .map(Some)
+            }
+        }
+
+        deserializer.deserialize_option(V)
     }
 }
 
@@ -199,10 +251,71 @@ pub enum BaseTypeArgs {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct BaseTypeMapping {
-    #[serde(with = "token_stream")]
-    pub rust_id: TokenStream,
-    pub args_num: BaseTypeArgs,
+#[serde(try_from = "BaseTypeMappingToml", into = "BaseTypeMappingToml")]
+pub enum BaseTypeMapping {
+    Skip,
+    Map(#[serde(with = "token_stream", default)] TokenStream),
+    MapWithArg(#[serde(with = "token_stream", default)] TokenStream),
+    Table(#[serde(with = "token_stream", default)] TokenStream),
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+struct BaseTypeMappingToml {
+    #[serde(default)]
+    skip: Option<bool>,
+    #[serde(with = "token_stream_opt", default)]
+    rust_id: Option<TokenStream>,
+    #[serde(default)]
+    args_num: Option<BaseTypeArgs>,
+    #[serde(with = "token_stream_opt", default)]
+    table: Option<TokenStream>,
+}
+
+impl From<BaseTypeMapping> for BaseTypeMappingToml {
+    fn from(source: BaseTypeMapping) -> Self {
+        match source {
+            BaseTypeMapping::Skip => BaseTypeMappingToml {
+                skip: Some(true),
+                ..Self::default()
+            },
+            BaseTypeMapping::Map(rust_id) => BaseTypeMappingToml {
+                rust_id: Some(rust_id),
+                args_num: Some(BaseTypeArgs::None),
+                ..Self::default()
+            },
+            BaseTypeMapping::MapWithArg(rust_id) => BaseTypeMappingToml {
+                rust_id: Some(rust_id),
+                args_num: Some(BaseTypeArgs::Single),
+                ..Self::default()
+            },
+            BaseTypeMapping::Table(rust_id) => BaseTypeMappingToml {
+                table: Some(rust_id),
+                ..Self::default()
+            },
+        }
+    }
+}
+
+impl TryFrom<BaseTypeMappingToml> for BaseTypeMapping {
+    type Error = String;
+
+    fn try_from(source: BaseTypeMappingToml) -> std::result::Result<Self, Self::Error> {
+        match (source.rust_id, source.args_num, source.skip, source.table) {
+            (Some(rust_id), None, None, None)
+            | (Some(rust_id), Some(BaseTypeArgs::None), None, None) => {
+                Ok(BaseTypeMapping::Map(rust_id))
+            }
+            (Some(rust_id), Some(BaseTypeArgs::Single), None, None) => {
+                Ok(BaseTypeMapping::MapWithArg(rust_id))
+            }
+            (None, Some(_), None, None) => Err(format!("Args num without rust_id")),
+            (None, None, Some(true), None) => Ok(BaseTypeMapping::Skip),
+            (_, _, Some(true), _) => Err(format!("Extra values not allowed for `skip`")),
+            (None, None, None, Some(rust_id)) => Ok(BaseTypeMapping::Table(rust_id)),
+            (_, _, _, Some(_)) => Err(format!("Extra values not allowed for `table`")),
+            _ => Err(format!("Incorrect base type mapping")),
+        }
+    }
 }
 
 impl<'a> Generator<'a> {
@@ -307,12 +420,7 @@ impl<'a> Generator<'a> {
         let type_name =
             some_or_gen_error!(type_name, Error::Assert(format!("No name for base type")));
         let preamble = self.config.type_preamble.clone();
-        let args = args
-            .iter()
-            .enumerate()
-            .map(|(i, arg)| self.type_reference(Some(&format!("{type_name}Arg{i}")), arg))
-            .collect::<Vec<_>>();
-        let base = self.base_type_mapping(uuid, &args);
+        let base = self.base_type_mapping(&type_name, uuid, &args);
         let name = format_ident!("{type_name}");
         let params = self.params(params);
         quote! {
@@ -746,13 +854,7 @@ impl<'a> Generator<'a> {
         uuid: &'a str,
         args: &'a [Expression],
     ) -> TokenStream {
-        let type_name = name_hint.unwrap_or("UnknownBaseType");
-        let args = args
-            .iter()
-            .enumerate()
-            .map(|(i, arg)| self.type_reference(Some(&format!("{type_name}Arg{i}")), arg))
-            .collect::<Vec<_>>();
-        self.base_type_mapping(uuid, &args)
+        self.base_type_mapping(name_hint.unwrap_or("UnknownBaseType"), uuid, &args)
     }
 
     fn type_reference_record(
@@ -810,6 +912,7 @@ impl<'a> Generator<'a> {
     ) -> TokenStream {
         let type_name =
             some_or_gen_error!(self.tenv.get(tid).cloned(), Error::UnresolvedRecType(tid));
+        println!("=== Rec_app: {type_name}");
         let args = args.iter().map(|expr| self.type_reference(None, expr));
         quote! {
             #type_name < #( #args ),* >
@@ -959,19 +1062,69 @@ impl<'a> Generator<'a> {
     }
 
     /// Generates Rust representation of Ocaml type `uuid` with type arguments `args`.
-    fn base_type_mapping(&self, uuid: &str, args: &[TokenStream]) -> TokenStream {
+    fn base_type_mapping(
+        &mut self,
+        type_name: &str,
+        uuid: &str,
+        args: &'a [Expression],
+    ) -> TokenStream {
         if let Some(mapping) = self.config.base_types.get(uuid) {
-            let name = mapping.rust_id.clone();
-            match (&mapping.args_num, args.len()) {
-                (BaseTypeArgs::None, 0) => name.to_token_stream(),
-                (BaseTypeArgs::Single, 1) => quote!(#name<#(#args),*>),
-                _ => gen_error!("Unexpected number of aguments to base type {uuid}"),
+            match (mapping, args) {
+                (BaseTypeMapping::Skip, []) => TokenStream::default(),
+                (BaseTypeMapping::Skip, [arg]) => self.type_reference(Some(&type_name), arg),
+                (BaseTypeMapping::Skip, _) => gen_error!("Unexpected number of aguments for the base type {uuid}"),
+                (BaseTypeMapping::Map(ts), []) => ts.clone(),
+                (BaseTypeMapping::Map(_), _) => {
+                    gen_error!("Unexpected number of aguments for the base type {uuid}")
+                }
+                (BaseTypeMapping::MapWithArg(ts), [arg]) => {
+                    let ts = ts.clone();
+                    let arg = self.type_reference(Some(&format!("{type_name}BaseArg")), arg);
+                    quote! { #ts<#arg> }
+                }
+                (BaseTypeMapping::MapWithArg(_), _) => {
+                    gen_error!("Unexpected number of aguments for the base type {uuid}")
+                }
+                (BaseTypeMapping::Table(rust_id), [arg]) => {
+                    let rust_id = rust_id.clone();
+                    let args = if let Expression::Top_app(_, _, args) = arg {
+                        args
+                    } else {
+                        return gen_error!("Unexpected argument for table: Top_app expected");
+                    };
+                    let arg = if let Some((arg, [])) = args.split_first() {
+                        arg
+                    } else {
+                        return gen_error!("Unexpected argument for table: single Top_app argument expected");
+                    };
+                    let elts = if let Expression::Tuple(elts) = arg {
+                        elts
+                    } else {
+                        return gen_error!("Unexpected argument for table: Tuple expected in Top_app argument");
+                    };
+                    let (key, value) = if let [key, value] = &elts[..] {
+                        (
+                            self.type_reference(Some(&format!("{type_name}Key")), key),
+                            self.type_reference(Some(&format!("{type_name}Value")), value),
+                        )
+                    } else {
+                        return gen_error!("Unexpected argument for table: Two-element Tuple expected in Top_app argument");
+                    };
+                    quote! { #rust_id<#key, #value> }
+                },
+                (BaseTypeMapping::Table(_), _) => {
+                    gen_error!("Unexpected number of aguments for the base type {uuid}")
+                }
             }
         } else {
             let name = format_ident!("{}", Self::sanitize_name(uuid));
             if args.is_empty() {
                 quote!(#name)
             } else {
+                let args = args
+                    .iter()
+                    .enumerate()
+                    .map(|(i, arg)| self.type_reference(Some(&format!("{type_name}Arg{i}")), arg));
                 quote!(#name<#(#args),*>)
             }
         }
@@ -991,29 +1144,26 @@ macro_rules! t {
             String::from(stringify!($name)),
             {
                 let ident = format_ident!("{}", stringify!($name));
-                BaseTypeMapping {
-                    rust_id: ident.to_token_stream(),
-                    args_num: BaseTypeArgs::None,
-                }
+                BaseTypeMapping::Map (
+                    ident.to_token_stream(),
+                )
             },
         )
     };
     ($name:ident => $($rust_toks:tt)*) => {
         (
             String::from(stringify!($name)),
-            BaseTypeMapping {
-                rust_id: stringify!($($rust_toks)*).parse().unwrap(),
-                args_num: BaseTypeArgs::None,
-            },
+            BaseTypeMapping::Map (
+                stringify!($($rust_toks)*).parse().unwrap(),
+            ),
         )
     };
     ($name:ident < _ > => $($rust_toks:tt)*) => {
         (
             String::from(stringify!($name)),
-            BaseTypeMapping {
-                rust_id: stringify!($($rust_toks)*).parse().unwrap(),
-                args_num: BaseTypeArgs::Single,
-            },
+            BaseTypeMapping::MapWithArg (
+                stringify!($($rust_toks)*).parse().unwrap(),
+            ),
         )
     };
 }
