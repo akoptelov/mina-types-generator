@@ -915,7 +915,7 @@ impl<'a> Generator<'a> {
         println!("=== Rec_app: {type_name}");
         let args = args.iter().map(|expr| self.type_reference(None, expr));
         quote! {
-            #type_name < #( #args ),* >
+            Box< #type_name < #( #args ),* > >
         }
     }
 
