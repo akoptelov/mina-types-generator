@@ -674,7 +674,7 @@ impl<'a> Generator<'a> {
         if let Some(ver_expr) = self.versioned_type(expr) {
             self.generate_versioned_top_app(type_name, named, group, tid, args, ver_expr)
         } else {
-            self.generate_plain_top_app(type_name, group, tid, args)
+            self.generate_plain_top_app(type_name, named, group, tid, args)
         }
     }
 
@@ -735,14 +735,19 @@ impl<'a> Generator<'a> {
     fn generate_plain_top_app(
         &mut self,
         type_name: Option<&str>,
+        named: bool,
         group: &'a Group,
         _tid: &str,
         _args: &'a [Expression],
     ) -> TokenStream {
         let Group { gid, loc, members } = group;
         let (tid, (vids, expr)) = some_or_gen_error!(members.first(), Error::EmptyGroup(&gid));
-
-        let type_name = some_or_gen_error!(type_name, Error::UnknownGroupName(gid)).to_string();
+        let type_name = if named {
+            let name = some_or_gen_error!(self.group_name(gid), Error::UnknownGroupName(gid));
+            Self::sanitize_name(name)
+        } else {
+            some_or_gen_error!(type_name, Error::UnknownGroupName(gid)).to_string()
+        };
 
         self.name_mapping
             .insert(gid, TypeStatus::Generated(type_name.clone()));
@@ -924,6 +929,12 @@ impl<'a> Generator<'a> {
         PREFIXES.iter().all(|p| !loc.starts_with(p))
     }
 
+    fn get_gid_name(&self, gid: &Gid) -> Option<(&str, bool)> {
+        self.xref
+            .expr_for_gid(*gid)
+            .and_then(|(expr, name_opt)| name_opt.map(|name| (name, self.versioned_type(expr).is_some())))
+    }
+
     fn type_reference_top_app(
         &mut self,
         name_hint: Option<&str>,
@@ -947,9 +958,13 @@ impl<'a> Generator<'a> {
                 name.to_string()
             }
             None => {
-                let type_name = if let Some((_, Some(name))) = self.xref.for_gid(*gid) {
-                    Self::get_versioned_type_name(name)
-                        .map_or_else(|e| e, |(name, _)| format!("{name}"))
+                let type_name = if let Some((name, versioned)) = self.get_gid_name(gid) {
+                    if versioned {
+                        Self::get_versioned_type_name(name)
+                            .map_or_else(|e| e, |(name, _)| Self::sanitize_name(&name))
+                    } else {
+                        Self::sanitize_name(name)
+                    }
                 } else {
                     let mut name = Self::sanitize_name(some_or_gen_error!(
                         self.group_name(gid).or(name_hint),
@@ -1041,6 +1056,7 @@ impl<'a> Generator<'a> {
     }
 
     fn sanitize_name(name: &str) -> String {
+        let name = name.strip_suffix(".t").unwrap_or(name);
         let mut san_name = String::new();
         if matches!(name.chars().next(), Some(first) if first.is_numeric()) {
             san_name.push('_');
@@ -1072,7 +1088,9 @@ impl<'a> Generator<'a> {
             match (mapping, args) {
                 (BaseTypeMapping::Skip, []) => TokenStream::default(),
                 (BaseTypeMapping::Skip, [arg]) => self.type_reference(Some(&type_name), arg),
-                (BaseTypeMapping::Skip, _) => gen_error!("Unexpected number of aguments for the base type {uuid}"),
+                (BaseTypeMapping::Skip, _) => {
+                    gen_error!("Unexpected number of aguments for the base type {uuid}")
+                }
                 (BaseTypeMapping::Map(ts), []) => ts.clone(),
                 (BaseTypeMapping::Map(_), _) => {
                     gen_error!("Unexpected number of aguments for the base type {uuid}")
@@ -1095,12 +1113,16 @@ impl<'a> Generator<'a> {
                     let arg = if let Some((arg, [])) = args.split_first() {
                         arg
                     } else {
-                        return gen_error!("Unexpected argument for table: single Top_app argument expected");
+                        return gen_error!(
+                            "Unexpected argument for table: single Top_app argument expected"
+                        );
                     };
                     let elts = if let Expression::Tuple(elts) = arg {
                         elts
                     } else {
-                        return gen_error!("Unexpected argument for table: Tuple expected in Top_app argument");
+                        return gen_error!(
+                            "Unexpected argument for table: Tuple expected in Top_app argument"
+                        );
                     };
                     let (key, value) = if let [key, value] = &elts[..] {
                         (
@@ -1111,7 +1133,7 @@ impl<'a> Generator<'a> {
                         return gen_error!("Unexpected argument for table: Two-element Tuple expected in Top_app argument");
                     };
                     quote! { #rust_id<#key, #value> }
-                },
+                }
                 (BaseTypeMapping::Table(_), _) => {
                     gen_error!("Unexpected number of aguments for the base type {uuid}")
                 }
@@ -1236,7 +1258,6 @@ mod tests {
             assert_eq!(gen_ref("(Base list ((Base bar ())))"), "Vec < Bar >");
             assert_eq!(gen_ref("(Base array ((Base bar ())))"), "Vec < Bar >");
         }
-
     }
 
     mod others {
@@ -1274,7 +1295,6 @@ pub struct MyType(pub BigInt);
             assert_eq!(rust, rust_act);
         }
     }
-
 
     mod toml {
         #[test]
