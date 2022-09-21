@@ -112,6 +112,11 @@ pub struct Config {
     /// Base types mapping.
     #[builder(default = "base_types()")]
     base_types: HashMap<String, BaseTypeMapping>,
+
+    /// Gids that shouldn't be generated.
+    #[builder(default)]
+    #[serde(default)]
+    skip: HashSet<String>,
 }
 
 mod token_stream {
@@ -721,7 +726,14 @@ impl<'a> Generator<'a> {
         self.name_mapping
             .insert(gid, TypeStatus::Generated(type_name.clone()));
 
-        let comment = self.generate_doc_comment(gid, loc);
+        let comment = if self.config.generate_comments {
+            let comment = self.generate_doc_comment(gid, loc);
+            quote! {
+                #[doc = #comment]
+            }
+        } else {
+            quote! {}
+        };
         let type_ref = self.type_reference(Some(&format!("{type_name}V{version}")), ver_expr);
         let type_name = format_ident!("{type_name}");
         let params = self.params(vids);
@@ -755,23 +767,44 @@ impl<'a> Generator<'a> {
         // let venv = ok_or_gen_error!(self.new_venv(&group.gid, vids, args, Some(&type_name)));
         let tenv = self.new_tenv(gid, tid, Some(&type_name));
 
+        let comment = self.generate_doc_comment(gid, loc);
         let expr = if matches!(expr, Expression::Top_app(..)) {
             let type_ref = self.type_reference(Some(&format!("{type_name}Poly")), expr);
             let type_name = format_ident!("{type_name}");
-            let comment = self.generate_doc_comment(gid, loc);
             let preamble = self.config.type_preamble.clone();
             let params = self.params(vids);
+            let comment = if self.config.generate_comments {
+                quote! {
+                    #[doc = #comment]
+                }
+            } else {
+                quote! {}
+            };
             quote! {
-                #comment
                 #preamble
+                #comment
                 pub struct #type_name #params (pub #type_ref);
             }
         } else {
             let expr = self.generate_type(Some(&type_name), expr, vids);
-            let comment = self.generate_doc_comment(gid, loc);
-            quote! {
-                #comment
-                #expr
+
+            if self.config.skip.contains(&type_name) {
+                let comment = format!(" The type `{type_name}` is skipped\n\n{comment}");
+                quote! {
+                    _comment_!(#comment);
+                }
+            } else {
+                let comment = if self.config.generate_comments {
+                    quote! {
+                        #[doc = #comment]
+                    }
+                } else {
+                    quote! {}
+                };
+                quote! {
+                    #comment
+                    #expr
+                }
             }
         };
 
@@ -806,19 +839,13 @@ impl<'a> Generator<'a> {
         Some(format!("[{loc}]({prefix}{file}#L{line})",))
     }
 
-    fn generate_doc_comment(&self, gid: &Gid, loc: &str) -> TokenStream {
-        if !self.config.generate_comments {
-            return quote!();
-        }
+    fn generate_doc_comment(&self, gid: &Gid, loc: &str) -> String {
         let git_loc = self.git_loc(loc);
         let loc = git_loc.as_ref().map(String::as_str).unwrap_or(loc);
-        let doc = if let Some(name) = self.xref.for_gid(*gid).and_then(|(_, name)| name) {
-            format!(" **Origin**: `{name}`\n\n **Location**: {loc}")
+        if let Some(name) = self.xref.for_gid(*gid).and_then(|(_, name)| name) {
+            format!(" **Origin**: `{name}`\n\n **Location**: {loc}\n\n **Gid**: {gid}")
         } else {
-            format!(" Location: {loc}")
-        };
-        quote! {
-            #[doc = #doc]
+            format!(" Location: {loc}\n\n Gid: {gid}")
         }
     }
 
@@ -917,7 +944,6 @@ impl<'a> Generator<'a> {
     ) -> TokenStream {
         let type_name =
             some_or_gen_error!(self.tenv.get(tid).cloned(), Error::UnresolvedRecType(tid));
-        println!("=== Rec_app: {type_name}");
         let args = args.iter().map(|expr| self.type_reference(None, expr));
         quote! {
             Box< #type_name < #( #args ),* > >
@@ -985,7 +1011,7 @@ impl<'a> Generator<'a> {
                     .insert(gid, TypeStatus::Pending(type_name.clone()));
                 let ts = self.generate_top_app(Some(&type_name), group, loc, args);
                 self.add_aux_type(ts);
-                type_name
+                self.name_mapping.get(gid).map(TypeStatus::type_name).map_or(type_name, String::from)
             }
         };
         let name = format_ident!("{type_name}");
