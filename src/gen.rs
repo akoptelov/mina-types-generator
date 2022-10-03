@@ -109,6 +109,11 @@ pub struct Config {
     #[serde(with = "token_stream", default)]
     phantom_type: TokenStream,
 
+    /// Suffix for binable versioned types.
+    #[builder(default)]
+    #[serde(default)]
+    versioned_suffix: Option<String>,
+
     /// Base types mapping.
     #[builder(default = "base_types()")]
     base_types: HashMap<String, BaseTypeMapping>,
@@ -683,23 +688,23 @@ impl<'a> Generator<'a> {
         }
     }
 
-    fn get_versioned_type_name(name: &str) -> std::result::Result<(String, i32), String> {
+    fn get_versioned_type_name(
+        name: &str,
+        suffix: Option<&str>,
+    ) -> std::result::Result<(String, i32), String> {
         if let Some(name) = name.strip_suffix(".t") {
             if let Some((_, version)) = name.rsplit_once(".V") {
                 if let Ok(version) = version.parse::<i32>() {
-                    return Ok((Self::sanitize_name(&format!("{name}.Binable")), version));
+                    return Ok((
+                        Self::sanitize_name(&format!("{name}{}", suffix.unwrap_or("Versioned"))),
+                        version,
+                    ));
                 }
             }
         }
         return Err(Self::sanitize_name(&format!("{name}IsNotVersioned")));
     }
 
-    // fn get_named_type_name(name: &str) -> std::result::Result<String, String> {
-    //     if let Some(name) = name.strip_suffix(".t") {
-    //         return Ok(Self::sanitize_name(name));
-    //     }
-    //     return Err(Self::sanitize_name(&format!("{name}IsNotVersioned")))
-    // }
 
     fn generate_versioned_top_app(
         &mut self,
@@ -715,7 +720,11 @@ impl<'a> Generator<'a> {
 
         let (type_name, version) = if named {
             let name = some_or_gen_error!(self.group_name(gid), Error::UnknownGroupName(gid));
-            Self::get_versioned_type_name(name).unwrap_or_else(|e| (e, 1))
+            Self::get_versioned_type_name(
+                name,
+                self.config.versioned_suffix.as_ref().map(String::as_str),
+            )
+            .unwrap_or_else(|e| (e, 1))
         } else {
             (
                 some_or_gen_error!(type_name, Error::UnknownGroupName(gid)).to_string(),
@@ -956,9 +965,9 @@ impl<'a> Generator<'a> {
     }
 
     fn get_gid_name(&self, gid: &Gid) -> Option<(&str, bool)> {
-        self.xref
-            .expr_for_gid(*gid)
-            .and_then(|(expr, name_opt)| name_opt.map(|name| (name, self.versioned_type(expr).is_some())))
+        self.xref.expr_for_gid(*gid).and_then(|(expr, name_opt)| {
+            name_opt.map(|name| (name, self.versioned_type(expr).is_some()))
+        })
     }
 
     fn type_reference_top_app(
@@ -986,8 +995,11 @@ impl<'a> Generator<'a> {
             None => {
                 let type_name = if let Some((name, versioned)) = self.get_gid_name(gid) {
                     if versioned {
-                        Self::get_versioned_type_name(name)
-                            .map_or_else(|e| e, |(name, _)| Self::sanitize_name(&name))
+                        Self::get_versioned_type_name(
+                            name,
+                            self.config.versioned_suffix.as_ref().map(String::as_str),
+                        )
+                        .map_or_else(|e| e, |(name, _)| Self::sanitize_name(&name))
                     } else {
                         Self::sanitize_name(name)
                     }
@@ -1011,7 +1023,10 @@ impl<'a> Generator<'a> {
                     .insert(gid, TypeStatus::Pending(type_name.clone()));
                 let ts = self.generate_top_app(Some(&type_name), group, loc, args);
                 self.add_aux_type(ts);
-                self.name_mapping.get(gid).map(TypeStatus::type_name).map_or(type_name, String::from)
+                self.name_mapping
+                    .get(gid)
+                    .map(TypeStatus::type_name)
+                    .map_or(type_name, String::from)
             }
         };
         let name = format_ident!("{type_name}");
@@ -1239,11 +1254,11 @@ mod tests {
         #[test]
         fn versioned_type_name() {
             assert_eq!(
-                super::super::Generator::get_versioned_type_name("Mod.Stable.V1.t"),
-                Ok((String::from("ModStableV1Binable"), 1))
+                super::super::Generator::get_versioned_type_name("Mod.Stable.V1.t", None),
+                Ok((String::from("ModStableV1Versioned"), 1))
             );
             assert_eq!(
-                super::super::Generator::get_versioned_type_name("Mod.Stable.V1"),
+                super::super::Generator::get_versioned_type_name("Mod.Stable.V1", None),
                 Err(String::from("ModStableV1IsNotVersioned"))
             );
         }
