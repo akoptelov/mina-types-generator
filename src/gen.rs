@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use derive_builder::Builder;
-use proc_macro2::TokenStream;
+use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote, ToTokens};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -52,14 +52,22 @@ pub enum Error<'a> {
     EmptyGroup(&'a Gid),
     #[error("Different lenght of type parameters `{1}` and arguments `{2}` for group `{0}`")]
     MismatchTypeParametersLenght(&'a Gid, usize, usize),
+    #[error("Mismatched type parameters lenght for base type `{0}`: expected {1}, got {2}")]
+    BaseTypeMismatchTypeParametersLenght(&'a str, usize, usize),
     #[error("Type `{0}` not found")]
     TypeNotFound(String),
+    #[error("Unknown base type `{0}`")]
+    UnknownBaseType(String),
     #[error("No name for group {0}")]
     UnknownGroupName(&'a Gid),
     #[error("Unresolved type variable {0}")]
     UnresolvedTypeVar(&'a str),
     #[error("Unresolved recursive type reference {0}")]
     UnresolvedRecType(&'a str),
+    #[error("Cannot extract type version from the name `{0}`")]
+    NoVersion(String),
+    #[error("Unnamed versioned type, gid {0}")]
+    UnnamedVersionedType(&'a Gid),
     #[error("Assertion failed: {0}")]
     Assert(String),
 }
@@ -98,6 +106,11 @@ pub struct Config {
     #[builder(default)]
     #[serde(with = "token_stream", default)]
     poly_var_preamble: TokenStream,
+
+    /// Use newtype pattern when defining types resolved to base type
+    #[builder(default)]
+    #[serde(default)]
+    use_newtype: bool,
 
     /// Versioned type, to be used to mark a type with a version.
     #[builder(default)]
@@ -215,6 +228,7 @@ mod token_stream_opt {
 }
 
 /// Status of a type generationl.
+#[derive(Debug)]
 enum TypeStatus {
     /// Type is referenced using this name and its generation is pending.
     Pending(String),
@@ -263,7 +277,6 @@ pub enum BaseTypeArgs {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(try_from = "BaseTypeMappingToml", into = "BaseTypeMappingToml")]
 pub enum BaseTypeMapping {
-    Skip,
     Map(#[serde(with = "token_stream", default)] TokenStream),
     MapWithArg(#[serde(with = "token_stream", default)] TokenStream),
     Table(#[serde(with = "token_stream", default)] TokenStream),
@@ -271,8 +284,6 @@ pub enum BaseTypeMapping {
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct BaseTypeMappingToml {
-    #[serde(default)]
-    skip: Option<bool>,
     #[serde(with = "token_stream_opt", default)]
     rust_id: Option<TokenStream>,
     #[serde(default)]
@@ -284,10 +295,6 @@ struct BaseTypeMappingToml {
 impl From<BaseTypeMapping> for BaseTypeMappingToml {
     fn from(source: BaseTypeMapping) -> Self {
         match source {
-            BaseTypeMapping::Skip => BaseTypeMappingToml {
-                skip: Some(true),
-                ..Self::default()
-            },
             BaseTypeMapping::Map(rust_id) => BaseTypeMappingToml {
                 rust_id: Some(rust_id),
                 args_num: Some(BaseTypeArgs::None),
@@ -310,19 +317,16 @@ impl TryFrom<BaseTypeMappingToml> for BaseTypeMapping {
     type Error = String;
 
     fn try_from(source: BaseTypeMappingToml) -> std::result::Result<Self, Self::Error> {
-        match (source.rust_id, source.args_num, source.skip, source.table) {
-            (Some(rust_id), None, None, None)
-            | (Some(rust_id), Some(BaseTypeArgs::None), None, None) => {
+        match (source.rust_id, source.args_num, source.table) {
+            (Some(rust_id), None, None) | (Some(rust_id), Some(BaseTypeArgs::None), None) => {
                 Ok(BaseTypeMapping::Map(rust_id))
             }
-            (Some(rust_id), Some(BaseTypeArgs::Single), None, None) => {
+            (Some(rust_id), Some(BaseTypeArgs::Single), None) => {
                 Ok(BaseTypeMapping::MapWithArg(rust_id))
             }
-            (None, Some(_), None, None) => Err(format!("Args num without rust_id")),
-            (None, None, Some(true), None) => Ok(BaseTypeMapping::Skip),
-            (_, _, Some(true), _) => Err(format!("Extra values not allowed for `skip`")),
-            (None, None, None, Some(rust_id)) => Ok(BaseTypeMapping::Table(rust_id)),
-            (_, _, _, Some(_)) => Err(format!("Extra values not allowed for `table`")),
+            (None, Some(_), None) => Err(format!("Args num without rust_id")),
+            (None, None, Some(rust_id)) => Ok(BaseTypeMapping::Table(rust_id)),
+            (_, _, Some(_)) => Err(format!("Extra values not allowed for `table`")),
             _ => Err(format!("Incorrect base type mapping")),
         }
     }
@@ -363,6 +367,9 @@ impl<'a> Generator<'a> {
         let mut ts = self.config.preamble.clone();
 
         self.generate_for_name(name).to_tokens(&mut ts);
+
+        //println!("{name} => {ts:?}");
+
         std::mem::take(&mut self.aux_types).to_tokens(&mut ts);
         ts
     }
@@ -412,9 +419,7 @@ impl<'a> Generator<'a> {
         if params.is_empty() {
             return None;
         }
-        let params = params
-            .iter()
-            .map(|vid| format_ident!("{}", Self::sanitize_name(vid)));
+        let params = params.iter().map(|vid| Self::type_ident(vid));
         Some(quote! {
             < #(#params),* >
         })
@@ -422,21 +427,12 @@ impl<'a> Generator<'a> {
 
     fn generate_base_type(
         &mut self,
-        type_name: Option<&str>,
-        uuid: &str,
-        args: &'a [Expression],
-        params: &[Vid],
+        _type_name: Option<&str>,
+        _uuid: &str,
+        _args: &'a [Expression],
+        _params: &[Vid],
     ) -> TokenStream {
-        let type_name =
-            some_or_gen_error!(type_name, Error::Assert(format!("No name for base type")));
-        let preamble = self.config.type_preamble.clone();
-        let base = self.base_type_mapping(&type_name, uuid, &args);
-        let name = format_ident!("{type_name}");
-        let params = self.params(params);
-        quote! {
-            #preamble
-            pub struct #name #params (pub #base);
-        }
+        Default::default()
     }
 
     fn generate_record(
@@ -447,7 +443,7 @@ impl<'a> Generator<'a> {
     ) -> TokenStream {
         let type_name =
             some_or_gen_error!(type_name, Error::Assert(format!("No name for record type")));
-        let name = format_ident!("{type_name}");
+        let name = Self::type_ident(type_name);
         let preamble = self.config.type_preamble.clone();
         let phantom_fields = self.get_unused_params(fields.iter().map(|(_, expr)| expr), params);
         let phantom_fields = phantom_fields
@@ -455,14 +451,14 @@ impl<'a> Generator<'a> {
             .enumerate()
             .map(|(i, vid)| self.generate_phantom_field(i, vid))
             .collect::<Vec<_>>();
-        let params = self.params(params);
+        //let params = self.params(params);
         let fields = fields
             .iter()
             .map(|(field, expr)| self.generate_field(type_name, field, expr, true))
             .chain(phantom_fields);
         quote! {
             #preamble
-            pub struct #name #params {
+            pub struct #name {
                 #(#fields,)*
             }
         }
@@ -506,7 +502,7 @@ impl<'a> Generator<'a> {
         expr: &'a Expression,
         make_public: bool,
     ) -> TokenStream {
-        let field_name = format_ident!("{field}");
+        let field_name = Self::ident(field);
         let field_type = self.type_reference(
             Some(&format!(
                 "{type_name}{field}",
@@ -522,7 +518,7 @@ impl<'a> Generator<'a> {
 
     fn generate_phantom_field(&self, i: usize, vid: &Vid) -> TokenStream {
         let field_name = format_ident!("_phantom_data_{}", i.to_string());
-        let type_name = format_ident!("{}", Self::sanitize_name(vid));
+        let type_name = Self::type_ident(vid);
         let phantom_type = self.config.phantom_type.clone();
         quote! {
             #field_name: #phantom_type< #type_name >
@@ -533,21 +529,20 @@ impl<'a> Generator<'a> {
         &mut self,
         type_name: Option<&str>,
         alts: &'a [(String, Vec<Expression>)],
-        params: &[Vid],
+        _params: &[Vid],
     ) -> TokenStream {
         let type_name = some_or_gen_error!(
             type_name,
             Error::Assert(format!("No name for variant type"))
         );
-        let name = format_ident!("{type_name}");
+        let name = Self::type_ident(type_name);
         let preamble = self.config.type_preamble.clone();
-        let params = self.params(params);
         let alts = alts
             .iter()
             .map(|(alt, exprs)| self.generate_alternative(type_name, alt, exprs));
         quote! {
             #preamble
-            pub enum #name #params {
+            pub enum #name {
                 #(
                     #alts,
                 )*
@@ -561,8 +556,7 @@ impl<'a> Generator<'a> {
         alt: &str,
         exprs: &'a [Expression],
     ) -> TokenStream {
-        let alt = Self::sanitize_name(alt);
-        let alt_name = format_ident!("{alt}");
+        let alt_name = Self::type_ident(alt);
         if exprs.is_empty() {
             quote!(#alt_name)
         } else if let Some((Expression::Record(fields), [])) = exprs.split_first() {
@@ -591,7 +585,7 @@ impl<'a> Generator<'a> {
     ) -> TokenStream {
         let type_name =
             some_or_gen_error!(type_name, Error::Assert(format!("No name for tuple type")));
-        let name = format_ident!("{type_name}");
+        let name = Self::type_ident(type_name);
         let preamble = self.config.type_preamble.clone();
         let params = self.params(params);
         let exprs = exprs
@@ -613,7 +607,7 @@ impl<'a> Generator<'a> {
     ) -> TokenStream {
         let type_name =
             some_or_gen_error!(type_name, Error::Assert(format!("No name for tuple type")));
-        let name = format_ident!("{type_name}");
+        let name = Self::type_ident(type_name);
         let preamble = self.config.type_preamble.clone();
         let poly_preamble = self.config.poly_var_preamble.clone();
         let params = self.params(params);
@@ -632,7 +626,7 @@ impl<'a> Generator<'a> {
     fn generate_poly_constr(&mut self, type_name: &str, constr: &'a PolyConstr) -> TokenStream {
         match constr {
             PolyConstr::Constr((name, opt_expr)) => {
-                let constr_name = format_ident!("{name}");
+                let constr_name = Self::type_ident(name);
                 if let Some(expr) = opt_expr {
                     let expr = self.type_reference(Some(&format!("{type_name}{name}")), expr);
                     quote!(#constr_name(#expr))
@@ -675,7 +669,7 @@ impl<'a> Generator<'a> {
         let named = !self.xref.is_anonymous(*gid);
         if named {
             if let Some(TypeStatus::Generated(_)) = self.name_mapping.get(gid) {
-                return quote!();
+                return Default::default();
             }
         }
 
@@ -688,69 +682,62 @@ impl<'a> Generator<'a> {
         }
     }
 
-    fn get_versioned_type_name(
-        name: &str,
-        suffix: Option<&str>,
-    ) -> std::result::Result<(String, i32), String> {
+    fn get_name_and_version(name: &str) -> std::result::Result<(String, syn::Lit), Error> {
+        use proc_macro2::Span;
+        use syn::{Lit, LitInt};
         if let Some(name) = name.strip_suffix(".t") {
             if let Some((_, version)) = name.rsplit_once(".V") {
-                if let Ok(version) = version.parse::<i32>() {
-                    return Ok((
-                        Self::sanitize_name(&format!("{name}{}", suffix.unwrap_or("Versioned"))),
-                        version,
-                    ));
-                }
+                return Ok((
+                    Self::sanitize_name(name),
+                    Lit::Int(LitInt::new(version, Span::mixed_site())),
+                ));
             }
         }
-        return Err(Self::sanitize_name(&format!("{name}IsNotVersioned")));
+        return Err(Error::NoVersion(name.to_string()));
     }
-
 
     fn generate_versioned_top_app(
         &mut self,
-        type_name: Option<&str>,
-        named: bool,
+        _type_name: Option<&str>,
+        _named: bool,
         group: &'a Group,
         _tid: &str,
         _args: &'a [Expression],
         ver_expr: &'a Expression,
     ) -> TokenStream {
-        let Group { gid, loc, members } = group;
-        let (_tid, (vids, _expr)) = some_or_gen_error!(members.first(), Error::EmptyGroup(&gid));
+        let Group {
+            gid,
+            loc: _,
+            members,
+        } = group;
+        let (_tid, (_vids, _expr)) = some_or_gen_error!(members.first(), Error::EmptyGroup(&gid));
 
-        let (type_name, version) = if named {
+        let (type_name, _version) = {
             let name = some_or_gen_error!(self.group_name(gid), Error::UnknownGroupName(gid));
-            Self::get_versioned_type_name(
-                name,
-                self.config.versioned_suffix.as_ref().map(String::as_str),
-            )
-            .unwrap_or_else(|e| (e, 1))
-        } else {
-            (
-                some_or_gen_error!(type_name, Error::UnknownGroupName(gid)).to_string(),
-                1,
-            )
+            ok_or_gen_error!(Self::get_name_and_version(name))
         };
 
         self.name_mapping
             .insert(gid, TypeStatus::Generated(type_name.clone()));
 
-        let comment = if self.config.generate_comments {
-            let comment = self.generate_doc_comment(gid, loc);
-            quote! {
-                #[doc = #comment]
-            }
-        } else {
-            quote! {}
-        };
-        let type_ref = self.type_reference(Some(&format!("{type_name}V{version}")), ver_expr);
-        let type_name = format_ident!("{type_name}");
-        let params = self.params(vids);
-        let versioned = self.config.versioned_type.clone();
-        quote! {
-            #comment
-            pub type #type_name #params = #versioned<#type_ref, #version>;
-        }
+        self.generate_type(Some(&format!("{type_name}")), ver_expr, &[])
+
+        // let comment = if self.config.generate_comments {
+        //     let comment = self.generate_doc_comment(gid, loc);
+        //     quote! {
+        //         #[doc = #comment]
+        //     }
+        // } else {
+        //     quote! {}
+        // };
+        // let type_ref = self.type_reference(Some(&format!("{type_name}V{version}")), ver_expr);
+        // let type_name = format_ident!("{type_name}");
+        // let params = self.params(vids);
+        // let versioned = self.config.versioned_type.clone();
+        // quote! {
+        //     #comment
+        //     pub type #type_name #params = #versioned<#type_ref, #version>;
+        // }
     }
 
     fn generate_plain_top_app(
@@ -759,7 +746,7 @@ impl<'a> Generator<'a> {
         named: bool,
         group: &'a Group,
         _tid: &str,
-        _args: &'a [Expression],
+        args: &'a [Expression],
     ) -> TokenStream {
         let Group { gid, loc, members } = group;
         let (tid, (vids, expr)) = some_or_gen_error!(members.first(), Error::EmptyGroup(&gid));
@@ -773,29 +760,25 @@ impl<'a> Generator<'a> {
         self.name_mapping
             .insert(gid, TypeStatus::Generated(type_name.clone()));
 
-        // let venv = ok_or_gen_error!(self.new_venv(&group.gid, vids, args, Some(&type_name)));
+        let venv = ok_or_gen_error!(self.new_venv(&group.gid, vids, args, Some(&type_name)));
         let tenv = self.new_tenv(gid, tid, Some(&type_name));
 
         let comment = self.generate_doc_comment(gid, loc);
-        let expr = if matches!(expr, Expression::Top_app(..)) {
-            let type_ref = self.type_reference(Some(&format!("{type_name}Poly")), expr);
-            let type_name = format_ident!("{type_name}");
-            let preamble = self.config.type_preamble.clone();
-            let params = self.params(vids);
-            let comment = if self.config.generate_comments {
-                quote! {
-                    #[doc = #comment]
+        let expr = {
+            let mut type_def = self.generate_type(Some(&type_name), expr, vids);
+            if type_def.is_empty() {
+                let type_ref = self.type_reference(Some(&type_name), expr);
+                let type_name = Self::type_ident(&type_name);
+                type_def = if self.config.use_newtype {
+                    quote! {
+                        pub struct #type_name(pub #type_ref);
+                    }
+                } else {
+                    quote! {
+                        pub type #type_name = #type_ref;
+                    }
                 }
-            } else {
-                quote! {}
-            };
-            quote! {
-                #preamble
-                #comment
-                pub struct #type_name #params (pub #type_ref);
             }
-        } else {
-            let expr = self.generate_type(Some(&type_name), expr, vids);
 
             if self.config.skip.contains(&type_name) {
                 let comment = format!(" The type `{type_name}` is skipped\n\n{comment}");
@@ -812,12 +795,13 @@ impl<'a> Generator<'a> {
                 };
                 quote! {
                     #comment
-                    #expr
+                    #type_def
                 }
             }
         };
 
         self.tenv = tenv;
+        self.venv = venv;
 
         expr
     }
@@ -891,27 +875,91 @@ impl<'a> Generator<'a> {
 
     fn type_reference_base(
         &mut self,
-        name_hint: Option<&str>,
+        _name_hint: Option<&str>,
         uuid: &'a str,
         args: &'a [Expression],
     ) -> TokenStream {
-        self.base_type_mapping(name_hint.unwrap_or("UnknownBaseType"), uuid, &args)
+        match (self.config.base_types.get(uuid).cloned(), args) {
+            (None, _) => Error::UnknownBaseType(uuid.into()).into(),
+            (Some(BaseTypeMapping::Map(mapped)), []) => quote! { #mapped },
+            (Some(BaseTypeMapping::Map(_)), _) => {
+                return Error::BaseTypeMismatchTypeParametersLenght(uuid, 0, args.len()).into()
+            }
+            (Some(BaseTypeMapping::MapWithArg(mapped)), [arg]) => {
+                let arg = self.type_reference(None, arg);
+                quote! { #mapped < #arg > }
+            }
+            (Some(BaseTypeMapping::MapWithArg(_)), args) => {
+                return Error::BaseTypeMismatchTypeParametersLenght(uuid, 0, args.len()).into()
+            }
+            (Some(BaseTypeMapping::Table(_rust_id)), [_arg]) => {
+                todo!()
+                // let rust_id = rust_id.clone();
+                // let args = if let Expression::Top_app(_, _, args) = arg {
+                //     args
+                // } else {
+                //     return gen_error!("Unexpected argument for table: Top_app expected");
+                // };
+                // let arg = if let Some((arg, [])) = args.split_first() {
+                //     arg
+                // } else {
+                //     return gen_error!(
+                //         "Unexpected argument for table: single Top_app argument expected"
+                //     );
+                // };
+                // let elts = if let Expression::Tuple(elts) = arg {
+                //     elts
+                // } else {
+                //     return gen_error!(
+                //         "Unexpected argument for table: Tuple expected in Top_app argument"
+                //     );
+                // };
+                // let (key, value) = if let [key, value] = &elts[..] {
+                //     (
+                //         self.type_reference(Some(&format!("{type_name}Key")), key),
+                //         self.type_reference(Some(&format!("{type_name}Value")), value),
+                //     )
+                // } else {
+                //     return gen_error!("Unexpected argument for table: Two-element Tuple expected in Top_app argument");
+                // };
+                // quote! { #rust_id<#key, #value> }
+            }
+            (Some(BaseTypeMapping::Table(_)), _) => {
+                gen_error!("Unexpected number of aguments for the base type {uuid}")
+            }
+        }
     }
 
     fn type_reference_record(
         &self,
-        _name_hint: Option<&str>,
+        name_hint: Option<&str>,
         _fields: &[(String, Expression)],
     ) -> TokenStream {
-        gen_error!("Cannot reference record")
+        some_or_gen_error!(
+            name_hint.map(|n| Self::type_ident(n)),
+            Error::Assert("Unnamed variant".into())
+        )
+        .into_token_stream()
     }
 
     fn type_reference_variant(
         &self,
-        _name_hint: Option<&str>,
+        name_hint: Option<&str>,
         _alts: &[(String, Vec<Expression>)],
     ) -> TokenStream {
-        gen_error!("Cannot reference variant")
+        some_or_gen_error!(
+            name_hint.map(|n| Self::type_ident(n)),
+            Error::Assert("Unnamed variant".into())
+        )
+        .into_token_stream()
+    }
+
+    fn type_ident(name: &str) -> Ident {
+        format_ident!("{}", Self::sanitize_name(name))
+    }
+
+    fn ident(name: &str) -> Ident {
+        format_ident!("{}", name)
     }
 
     fn type_reference_tuple(
@@ -935,40 +983,38 @@ impl<'a> Generator<'a> {
             name_hint,
             Error::Assert("issue with poly_variant".to_string())
         );
-        format_ident!("{name}").to_token_stream()
+        Self::type_ident(name).to_token_stream()
     }
 
     fn type_reference_var(&self, _name_hint: Option<&str>, _loc: &str, vid: &str) -> TokenStream {
-        self.venv
-            .get(vid)
-            .cloned()
-            .unwrap_or_else(|| format_ident!("{}", Self::sanitize_name(vid)).to_token_stream())
+        some_or_gen_error!(self.venv.get(vid).cloned(), Error::UnresolvedTypeVar(vid))
     }
 
     fn type_reference_rec_app(
         &mut self,
         _name_hint: Option<&str>,
         tid: &str,
-        args: &'a [Expression],
+        _args: &'a [Expression],
     ) -> TokenStream {
         let type_name =
             some_or_gen_error!(self.tenv.get(tid).cloned(), Error::UnresolvedRecType(tid));
-        let args = args.iter().map(|expr| self.type_reference(None, expr));
+        // TODO match args, report error if unmatched
+        //let args = args.iter().map(|expr| self.type_reference(None, expr));
         quote! {
-            Box< #type_name < #( #args ),* > >
+            Box< #type_name >
         }
     }
 
-    fn is_external_type(&self, loc: &Location) -> bool {
-        const PREFIXES: &[&str] = &["src/lib/", "src/app"];
-        PREFIXES.iter().all(|p| !loc.starts_with(p))
-    }
+    // fn is_external_type(&self, loc: &Location) -> bool {
+    //     const PREFIXES: &[&str] = &["src/lib/", "src/app"];
+    //     PREFIXES.iter().all(|p| !loc.starts_with(p))
+    // }
 
-    fn get_gid_name(&self, gid: &Gid) -> Option<(&str, bool)> {
-        self.xref.expr_for_gid(*gid).and_then(|(expr, name_opt)| {
-            name_opt.map(|name| (name, self.versioned_type(expr).is_some()))
-        })
-    }
+    // fn get_gid_name(&self, gid: &Gid) -> Option<&str> {
+    //     self.xref
+    //         .expr_for_gid(*gid)
+    //         .and_then(|(expr, name_opt)| name_opt)
+    // }
 
     fn type_reference_top_app(
         &mut self,
@@ -977,73 +1023,102 @@ impl<'a> Generator<'a> {
         _tid: &str,
         args: &'a [Expression],
     ) -> TokenStream {
-        let Group { gid, loc, members } = group;
-        let (_tid, (vids, expr)) = some_or_gen_error!(members.first(), Error::EmptyGroup(gid));
+        let Group {
+            gid,
+            loc: _,
+            members,
+        } = group;
+        let (tid, (vids, expr)) = some_or_gen_error!(members.first(), Error::EmptyGroup(gid));
 
-        if self.is_external_type(loc) {
-            let venv = ok_or_gen_error!(self.new_venv(gid, vids, args, name_hint));
-            let res = self.type_reference(name_hint, expr);
-            self.venv = venv;
-            return res;
-        }
+        let name_hint = //self.get_gid_name(gid).or_else(|| name_hint);
+                self.xref
+            .expr_for_gid(*gid)
+            .and_then(|(_expr, name_opt)| name_opt).or_else(|| name_hint);
 
-        let type_name = match self.name_mapping.get(gid) {
-            Some(TypeStatus::Generated(name)) | Some(TypeStatus::Pending(name)) => {
-                //println!("{gid} => {name}");
-                name.to_string()
+        if let Some(ver_expr) = self.versioned_type(expr) {
+            let type_name = some_or_gen_error!(name_hint, Error::UnnamedVersionedType(gid));
+            let (_name, version) = ok_or_gen_error!(Self::get_name_and_version(type_name));
+            let type_ref = self.type_reference(Some(type_name), ver_expr);
+            quote! {
+                Versioned< #type_ref, #version >
             }
-            None => {
-                let type_name = if let Some((name, versioned)) = self.get_gid_name(gid) {
-                    if versioned {
-                        Self::get_versioned_type_name(
-                            name,
-                            self.config.versioned_suffix.as_ref().map(String::as_str),
-                        )
-                        .map_or_else(|e| e, |(name, _)| Self::sanitize_name(&name))
-                    } else {
-                        Self::sanitize_name(name)
-                    }
-                } else {
-                    let mut name = Self::sanitize_name(some_or_gen_error!(
-                        self.group_name(gid).or(name_hint),
-                        Error::UnknownGroupName(gid)
-                    ));
-                    if let Some(existing) = self.used_names.get_mut(&name) {
-                        //println!("{name}: {existing:?}");
-                        if !existing.contains(gid) {
-                            name = format!("{name}Dup{}", existing.len());
-                            existing.insert(gid);
-                        }
-                    } else {
-                        self.used_names.insert(name.clone(), HashSet::from([gid]));
-                    }
-                    name
-                };
-                self.name_mapping
-                    .insert(gid, TypeStatus::Pending(type_name.clone()));
-                let ts = self.generate_top_app(Some(&type_name), group, loc, args);
-                self.add_aux_type(ts);
-                self.name_mapping
-                    .get(gid)
-                    .map(TypeStatus::type_name)
-                    .map_or(type_name, String::from)
-            }
-        };
-        let name = format_ident!("{type_name}");
-
-        let args = if args.is_empty() {
-            None
         } else {
-            let args = args.iter().enumerate().map(|(i, arg)| {
-                let type_name = format!("{name}Arg{i}");
-                self.type_reference(Some(&type_name), arg)
-            });
-            Some(quote!(< #(#args),*>))
-        };
-
-        quote! {
-            #name #args
+            let venv = ok_or_gen_error!(self.new_venv(gid, vids, args, name_hint));
+            let tenv = self.new_tenv(gid, tid, name_hint);
+            if !matches!(self.name_mapping.get(gid), Some(TypeStatus::Generated(_))) {
+                let ty = self.generate_type(name_hint, expr, vids);
+                self.add_aux_type(ty);
+            }
+            let type_ref = self.type_reference(name_hint, expr);
+            self.tenv = tenv;
+            self.venv = venv;
+            type_ref
         }
+
+        // if self.is_external_type(loc) {
+        //     let venv = ok_or_gen_error!(self.new_venv(gid, vids, args, name_hint));
+        //     let res = self.type_reference(name_hint, expr);
+        //     self.venv = venv;
+        //     return res;
+        // }
+
+        // let type_name = match self.name_mapping.get(gid) {
+        //     Some(TypeStatus::Generated(name)) | Some(TypeStatus::Pending(name)) => {
+        //         //println!("{gid} => {name}");
+        //         name.to_string()
+        //     }
+        //     None => {
+        //         let type_name = if let Some((name, versioned)) = self.get_gid_name(gid) {
+        //             if versioned {
+        //                 Self::get_versioned_type_name(
+        //                     name,
+        //                     self.config.versioned_suffix.as_ref().map(String::as_str),
+        //                 )
+        //                 .map_or_else(|e| e, |(name, _)| Self::sanitize_name(&name))
+        //             } else {
+        //                 Self::sanitize_name(name)
+        //             }
+        //         } else {
+        //             let mut name = Self::sanitize_name(some_or_gen_error!(
+        //                 self.group_name(gid).or(name_hint),
+        //                 Error::UnknownGroupName(gid)
+        //             ));
+        //             if let Some(existing) = self.used_names.get_mut(&name) {
+        //                 //println!("{name}: {existing:?}");
+        //                 if !existing.contains(gid) {
+        //                     name = format!("{name}Dup{}", existing.len());
+        //                     existing.insert(gid);
+        //                 }
+        //             } else {
+        //                 self.used_names.insert(name.clone(), HashSet::from([gid]));
+        //             }
+        //             name
+        //         };
+        //         self.name_mapping
+        //             .insert(gid, TypeStatus::Pending(type_name.clone()));
+        //         let ts = self.generate_top_app(Some(&type_name), group, loc, args);
+        //         self.add_aux_type(ts);
+        //         self.name_mapping
+        //             .get(gid)
+        //             .map(TypeStatus::type_name)
+        //             .map_or(type_name, String::from)
+        //     }
+        // };
+        // let name = format_ident!("{type_name}");
+
+        // let args = if args.is_empty() {
+        //     None
+        // } else {
+        //     let args = args.iter().enumerate().map(|(i, arg)| {
+        //         let type_name = format!("{name}Arg{i}");
+        //         self.type_reference(Some(&type_name), arg)
+        //     });
+        //     Some(quote!(< #(#args),*>))
+        // };
+
+        // quote! {
+        //     #name #args
+        // }
     }
 
     fn new_venv(
@@ -1091,7 +1166,7 @@ impl<'a> Generator<'a> {
     ) -> HashMap<&'a str, TokenStream> {
         let mut tenv = self.tenv.clone();
         if let Some(name) = type_name {
-            tenv.insert(tid, format_ident!("{name}").to_token_stream());
+            tenv.insert(tid, Self::type_ident(name).to_token_stream());
         }
         std::mem::replace(&mut self.tenv, tenv)
     }
@@ -1116,81 +1191,6 @@ impl<'a> Generator<'a> {
             }
         }
         san_name
-    }
-
-    /// Generates Rust representation of Ocaml type `uuid` with type arguments `args`.
-    fn base_type_mapping(
-        &mut self,
-        type_name: &str,
-        uuid: &str,
-        args: &'a [Expression],
-    ) -> TokenStream {
-        if let Some(mapping) = self.config.base_types.get(uuid) {
-            match (mapping, args) {
-                (BaseTypeMapping::Skip, []) => TokenStream::default(),
-                (BaseTypeMapping::Skip, [arg]) => self.type_reference(Some(&type_name), arg),
-                (BaseTypeMapping::Skip, _) => {
-                    gen_error!("Unexpected number of aguments for the base type {uuid}")
-                }
-                (BaseTypeMapping::Map(ts), []) => ts.clone(),
-                (BaseTypeMapping::Map(_), _) => {
-                    gen_error!("Unexpected number of aguments for the base type {uuid}")
-                }
-                (BaseTypeMapping::MapWithArg(ts), [arg]) => {
-                    let ts = ts.clone();
-                    let arg = self.type_reference(Some(&format!("{type_name}BaseArg")), arg);
-                    quote! { #ts<#arg> }
-                }
-                (BaseTypeMapping::MapWithArg(_), _) => {
-                    gen_error!("Unexpected number of aguments for the base type {uuid}")
-                }
-                (BaseTypeMapping::Table(rust_id), [arg]) => {
-                    let rust_id = rust_id.clone();
-                    let args = if let Expression::Top_app(_, _, args) = arg {
-                        args
-                    } else {
-                        return gen_error!("Unexpected argument for table: Top_app expected");
-                    };
-                    let arg = if let Some((arg, [])) = args.split_first() {
-                        arg
-                    } else {
-                        return gen_error!(
-                            "Unexpected argument for table: single Top_app argument expected"
-                        );
-                    };
-                    let elts = if let Expression::Tuple(elts) = arg {
-                        elts
-                    } else {
-                        return gen_error!(
-                            "Unexpected argument for table: Tuple expected in Top_app argument"
-                        );
-                    };
-                    let (key, value) = if let [key, value] = &elts[..] {
-                        (
-                            self.type_reference(Some(&format!("{type_name}Key")), key),
-                            self.type_reference(Some(&format!("{type_name}Value")), value),
-                        )
-                    } else {
-                        return gen_error!("Unexpected argument for table: Two-element Tuple expected in Top_app argument");
-                    };
-                    quote! { #rust_id<#key, #value> }
-                }
-                (BaseTypeMapping::Table(_), _) => {
-                    gen_error!("Unexpected number of aguments for the base type {uuid}")
-                }
-            }
-        } else {
-            let name = format_ident!("{}", Self::sanitize_name(uuid));
-            if args.is_empty() {
-                quote!(#name)
-            } else {
-                let args = args
-                    .iter()
-                    .enumerate()
-                    .map(|(i, arg)| self.type_reference(Some(&format!("{type_name}Arg{i}")), arg));
-                quote!(#name<#(#args),*>)
-            }
-        }
     }
 
     fn group_name(&self, gid: &Gid) -> Option<&str> {
@@ -1251,16 +1251,22 @@ fn base_types() -> HashMap<String, BaseTypeMapping> {
 mod tests {
 
     mod names {
+        use quote::ToTokens;
+
         #[test]
         fn versioned_type_name() {
             assert_eq!(
-                super::super::Generator::get_versioned_type_name("Mod.Stable.V1.t", None),
-                Ok((String::from("ModStableV1Versioned"), 1))
+                super::super::Generator::get_name_and_version("Mod.Stable.V1.t")
+                    .map(|(n, v)| (n, v.to_token_stream().to_string()))
+                    .unwrap(),
+                (String::from("ModStableV1"), "1".to_string())
             );
-            assert_eq!(
-                super::super::Generator::get_versioned_type_name("Mod.Stable.V1", None),
-                Err(String::from("ModStableV1IsNotVersioned"))
-            );
+            assert!(matches!(
+                super::super::Generator::get_name_and_version("Mod.Stable.V1")
+                    .map(|_| ())
+                    .unwrap_err(),
+                super::super::Error::NoVersion(_)
+            ));
         }
     }
 
@@ -1292,12 +1298,9 @@ mod tests {
 
         #[test]
         fn base_type() {
-            assert_eq!(gen_ref("(Base foo ())"), "Foo");
-
-            assert_eq!(gen_ref("(Base foo ((Base bar ())))"), "Foo < Bar >");
-            assert_eq!(gen_ref("(Base option ((Base bar ())))"), "Option < Bar >");
-            assert_eq!(gen_ref("(Base list ((Base bar ())))"), "Vec < Bar >");
-            assert_eq!(gen_ref("(Base array ((Base bar ())))"), "Vec < Bar >");
+            assert_eq!(gen_ref("(Base option ((Base int ())))"), "Option < i32 >");
+            assert_eq!(gen_ref("(Base list ((Base int ())))"), "Vec < i32 >");
+            assert_eq!(gen_ref("(Base array ((Base int ())))"), "Vec < i32 >");
         }
     }
 
@@ -1318,7 +1321,7 @@ mod tests {
   (members ((t (() (Base kimchi_backend_bigint_32_V1 ()))))))
  t ())"#;
             let rust = r#"pub type BigInt = [u8; 32];
-pub struct MyType(pub BigInt);
+pub type MyType = BigInt;
 "#;
             let expr: Expression = expr.parse().unwrap();
             let binding = [("MyType", expr.clone())];
