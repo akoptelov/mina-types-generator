@@ -581,20 +581,19 @@ impl<'a> Generator<'a> {
         &mut self,
         type_name: Option<&str>,
         exprs: &'a [Expression],
-        params: &[Vid],
+        _params: &[Vid],
     ) -> TokenStream {
         let type_name =
             some_or_gen_error!(type_name, Error::Assert(format!("No name for tuple type")));
         let name = Self::type_ident(type_name);
         let preamble = self.config.type_preamble.clone();
-        let params = self.params(params);
         let exprs = exprs
             .iter()
             .enumerate()
             .map(|(i, expr)| self.type_reference(Some(&format!("{type_name}{i}")), expr));
         quote! {
             #preamble
-            pub struct #name #params (#(pub #exprs,)*);
+            pub struct #name (#(pub #exprs,)*);
         }
     }
 
@@ -1028,7 +1027,7 @@ impl<'a> Generator<'a> {
             loc: _,
             members,
         } = group;
-        let (tid, (vids, expr)) = some_or_gen_error!(members.first(), Error::EmptyGroup(gid));
+        let (_tid, (vids, expr)) = some_or_gen_error!(members.first(), Error::EmptyGroup(gid));
 
         let name_hint = //self.get_gid_name(gid).or_else(|| name_hint);
                 self.xref
@@ -1043,14 +1042,12 @@ impl<'a> Generator<'a> {
                 Versioned< #type_ref, #version >
             }
         } else {
-            let venv = ok_or_gen_error!(self.new_venv(gid, vids, args, name_hint));
-            let tenv = self.new_tenv(gid, tid, name_hint);
             if !matches!(self.name_mapping.get(gid), Some(TypeStatus::Generated(_))) {
-                let ty = self.generate_type(name_hint, expr, vids);
+                let ty = self.generate_top_app(name_hint, group, _tid, args);
                 self.add_aux_type(ty);
             }
+            let venv = ok_or_gen_error!(self.new_venv(gid, vids, args, name_hint));
             let type_ref = self.type_reference(name_hint, expr);
-            self.tenv = tenv;
             self.venv = venv;
             type_ref
         }
