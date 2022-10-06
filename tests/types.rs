@@ -37,7 +37,7 @@ fn record() {
           t ())))))))))
  t ())"#;
     let rust = r#"pub struct MyRecord {
-    pub trust: MyRecordTrust,
+    pub trust: f32,
     pub trust_last_updated: f32,
 }
 "#;
@@ -86,9 +86,9 @@ fn record_with_option() {
             t ())))))))))))
  t ())"#;
     let rust = r#"pub struct MyRecord {
-    pub trust: MyRecordTrust,
+    pub trust: f32,
     pub trust_last_updated: f32,
-    pub banned_until_opt: MyRecordBannedUntilOpt<f32>,
+    pub banned_until_opt: Option<f32>,
 }
 "#;
     assert_eq!(format(gen_type1("MyRecord", src)).unwrap(), rust);
@@ -116,7 +116,7 @@ fn variant() {
         (Completed ()))))))))
  t ())"#;
     let rust = r#"pub enum MyEnum {
-    At(MyEnumAt0),
+    At(i32),
     Completed,
 }
 "#;
@@ -174,7 +174,7 @@ fn tuple() {
                t ()))))))
          string ()))))))))
  t ())"#;
-    let rust = r#"pub struct MyTuple(pub MyTuple0, pub MyTuple1);
+    let rust = r#"pub struct MyTuple(pub i32, pub String);
 "#;
     assert_eq!(format(gen_type1("MyTuple", src)).unwrap(), rust);
 }
@@ -208,7 +208,7 @@ fn san_name() {
                t ()))))))
          string ()))))))))
  t ())"#;
-    let rust = r#"pub struct MyTuple(pub MyTuple0, pub MyTuple1);
+    let rust = r#"pub struct MyTuple(pub i32, pub String);
 "#;
     assert_eq!(format(gen_type1("My.tuple.t", src)).unwrap(), rust);
 }

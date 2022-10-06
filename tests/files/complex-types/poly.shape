@@ -1,0 +1,23 @@
+(Top_app
+ ((gid 753) (loc src/lib/mina_base/pending_coinbase.ml:245:6)
+  (members
+   ((t
+     (()
+      (Top_app
+       ((gid 752) (loc src/lib/mina_base/pending_coinbase.ml:236:8)
+        (members
+         ((t
+           ((stack_hash)
+            (Record
+             ((init
+               (Var
+                (src/lib/mina_base/pending_coinbase.ml:236:38 stack_hash)))
+              (curr
+               (Var
+                (src/lib/mina_base/pending_coinbase.ml:236:58 stack_hash))))))))))
+       t
+       ((Top_app
+         ((gid 749) (loc src/lib/mina_base/pending_coinbase.ml:210:6)
+          (members ((t (() (Base kimchi_backend_bigint_32_V1 ()))))))
+         t ()))))))))
+ t ())

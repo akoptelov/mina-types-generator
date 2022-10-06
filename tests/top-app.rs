@@ -19,9 +19,9 @@ fn top_app_base_type() {
     (members
      ((t
        (()
-        (Base foo ()))))))
+        (Base int ()))))))
    t ())))"#;
-    assert_eq!(gen_ref(src).to_string(), "Vec < Foo >");
+    assert_eq!(gen_ref(src).to_string(), "Vec < i32 >");
 
     let src = r#"(Top_app
  ((gid 683) (loc src/lib1/mina_base/transaction_status.ml:71:8)
@@ -54,11 +54,11 @@ fn top_app_base_type() {
             (members
              ((t
                (()
-                (Base foo ()
+                (Base int ()
                  ))))))
            t ()))))))))))
  t ())"#;
-    assert_eq!(gen_ref(src).to_string(), "Vec < Vec < Foo > >");
+    assert_eq!(gen_ref(src).to_string(), "Vec < Vec < i32 > >");
 }
 
 #[test]

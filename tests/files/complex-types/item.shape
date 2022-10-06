@@ -1,0 +1,9 @@
+(Top_app
+ ((gid 681) (loc src/lib/mina_base/transaction_status.ml:9:6)
+  (members
+   ((t
+     (()
+      (Variant
+       ((Predicate ()) (Source_not_present ()) (Receiver_not_present ())
+        (Invalid_fee_excess ()))))))))
+ t ())
