@@ -1,0 +1,25 @@
+(Top_app
+ ((gid 515) (loc src/lib/pickles/composition_types/branch_data.ml:51:6)
+  (members
+   ((t
+     (()
+      (Record
+       ((proofs_verified
+         (Top_app
+          ((gid 505) (loc src/lib/pickles_base/proofs_verified.ml:7:4)
+           (members ((t (() (Variant ((N0 ()) (N1 ()) (N2 ())))))))) t ()))
+        (domain_log2
+         (Top_app
+          ((gid 514) (loc src/lib/pickles/composition_types/branch_data.ml:24:8)
+           (members
+            ((t
+              (()
+               (Top_app
+                ((gid 161) (loc src/std_internal.ml:113:2)
+                 (members
+                  ((char
+                    (()
+                     (Top_app
+                      ((gid 89) (loc src/char.ml:8:6)
+                       (members ((t (() (Base char ())))))) t ())))))) char ())))))) t ())))))))))
+ t ())

@@ -1,0 +1,2000 @@
+(Top_app
+ ((gid 531) (loc src/lib/pickles/proof.ml:340:8)
+  (members
+   ((t
+     (()
+      (Top_app
+       ((gid 530) (loc src/lib/pickles/proof.ml:47:8)
+        (members
+         ((t
+           ((messages_for_next_wrap_proof messages_for_next_step_proof)
+            (Record
+             ((statement
+               (Top_app
+                ((gid 523)
+                 (loc src/lib/pickles/composition_types/composition_types.ml:625:10)
+                 (members
+                  ((t
+                    ((challenge scalar_challenge fp messages_for_next_wrap_proof digest
+                      messages_for_next_step_proof bp_chals index)
+                     (Top_app
+                      ((gid 522)
+                       (loc src/lib/pickles/composition_types/composition_types.ml:588:8)
+                       (members
+                        ((t
+                          ((plonk scalar_challenge fp messages_for_next_wrap_proof digest
+                            messages_for_next_step_proof bp_chals index)
+                           (Record
+                            ((proof_state
+                              (Top_app
+                               ((gid 521)
+                                (loc
+                                 src/lib/pickles/composition_types/composition_types.ml:375:8)
+                                (members
+                                 ((t
+                                   ((plonk scalar_challenge fp messages_for_next_wrap_proof
+                                     digest bp_chals index)
+                                    (Record
+                                     ((deferred_values
+                                       (Top_app
+                                        ((gid 519)
+                                         (loc
+                                          src/lib/pickles/composition_types/composition_types.ml:206:10)
+                                         (members
+                                          ((t
+                                            ((plonk scalar_challenge fp
+                                              bulletproof_challenges branch_data)
+                                             (Record
+                                              ((plonk
+                                                (Var
+                                                 (src/lib/pickles/composition_types/composition_types.ml:221:22
+                                                  plonk)))
+                                               (combined_inner_product
+                                                (Var
+                                                 (src/lib/pickles/composition_types/composition_types.ml:222:39
+                                                  fp)))
+                                               (b
+                                                (Var
+                                                 (src/lib/pickles/composition_types/composition_types.ml:224:18
+                                                  fp)))
+                                               (xi
+                                                (Var
+                                                 (src/lib/pickles/composition_types/composition_types.ml:228:19
+                                                  scalar_challenge)))
+                                               (bulletproof_challenges
+                                                (Var
+                                                 (src/lib/pickles/composition_types/composition_types.ml:230:39
+                                                  bulletproof_challenges)))
+                                               (branch_data
+                                                (Var
+                                                 (src/lib/pickles/composition_types/composition_types.ml:232:28
+                                                  branch_data)))))))))) t
+                                        ((Var
+                                          (src/lib/pickles/composition_types/composition_types.ml:392:16
+                                           plonk))
+                                         (Var
+                                          (src/lib/pickles/composition_types/composition_types.ml:393:16
+                                           scalar_challenge))
+                                         (Var
+                                          (src/lib/pickles/composition_types/composition_types.ml:394:16
+                                           fp))
+                                         (Var
+                                          (src/lib/pickles/composition_types/composition_types.ml:395:16
+                                           bp_chals))
+                                         (Var
+                                          (src/lib/pickles/composition_types/composition_types.ml:396:16
+                                           index)))))
+                                      (sponge_digest_before_evaluations
+                                       (Var
+                                        (src/lib/pickles/composition_types/composition_types.ml:398:47
+                                         digest)))
+                                      (messages_for_next_wrap_proof
+                                       (Var
+                                        (src/lib/pickles/composition_types/composition_types.ml:399:43
+                                         messages_for_next_wrap_proof)))))))))) t
+                               ((Var
+                                 (src/lib/pickles/composition_types/composition_types.ml:607:16
+                                  plonk))
+                                (Var
+                                 (src/lib/pickles/composition_types/composition_types.ml:608:16
+                                  scalar_challenge))
+                                (Var
+                                 (src/lib/pickles/composition_types/composition_types.ml:609:16
+                                  fp))
+                                (Var
+                                 (src/lib/pickles/composition_types/composition_types.ml:610:16
+                                  messages_for_next_wrap_proof))
+                                (Var
+                                 (src/lib/pickles/composition_types/composition_types.ml:611:16
+                                  digest))
+                                (Var
+                                 (src/lib/pickles/composition_types/composition_types.ml:612:16
+                                  bp_chals))
+                                (Var
+                                 (src/lib/pickles/composition_types/composition_types.ml:613:16
+                                  index)))))
+                             (messages_for_next_step_proof
+                              (Var
+                               (src/lib/pickles/composition_types/composition_types.ml:615:43
+                                messages_for_next_step_proof)))))))))) t
+                      ((Top_app
+                        ((gid 518)
+                         (loc src/lib/pickles/composition_types/composition_types.ml:45:14)
+                         (members
+                          ((t
+                            ((challenge scalar_challenge)
+                             (Record
+                              ((alpha
+                                (Var
+                                 (src/lib/pickles/composition_types/composition_types.ml:54:26
+                                  scalar_challenge)))
+                               (beta
+                                (Var
+                                 (src/lib/pickles/composition_types/composition_types.ml:55:25
+                                  challenge)))
+                               (gamma
+                                (Var
+                                 (src/lib/pickles/composition_types/composition_types.ml:56:26
+                                  challenge)))
+                               (zeta
+                                (Var
+                                 (src/lib/pickles/composition_types/composition_types.ml:57:25
+                                  scalar_challenge)))
+                               (joint_combiner
+                                (Top_app
+                                 ((gid 169) (loc src/std_internal.ml:137:2)
+                                  (members
+                                   ((option
+                                     ((a)
+                                      (Top_app
+                                       ((gid 60) (loc src/option.ml:4:0)
+                                        (members
+                                         ((t
+                                           ((a)
+                                            (Base option ((Var (src/option.ml:4:12 a)))))))))
+                                       t ((Var (src/std_internal.ml:137:19 a)))))))))
+                                 option
+                                 ((Var
+                                   (src/lib/pickles/composition_types/composition_types.ml:58:35
+                                    scalar_challenge)))))))))))) t
+                        ((Var
+                          (src/lib/pickles/composition_types/composition_types.ml:634:16
+                           challenge))
+                         (Var
+                          (src/lib/pickles/composition_types/composition_types.ml:635:16
+                           scalar_challenge))))
+                       (Var
+                        (src/lib/pickles/composition_types/composition_types.ml:637:14
+                         scalar_challenge))
+                       (Var
+                        (src/lib/pickles/composition_types/composition_types.ml:638:14 fp))
+                       (Var
+                        (src/lib/pickles/composition_types/composition_types.ml:639:14
+                         messages_for_next_wrap_proof))
+                       (Var
+                        (src/lib/pickles/composition_types/composition_types.ml:640:14
+                         digest))
+                       (Var
+                        (src/lib/pickles/composition_types/composition_types.ml:641:14
+                         messages_for_next_step_proof))
+                       (Var
+                        (src/lib/pickles/composition_types/composition_types.ml:642:14
+                         bp_chals))
+                       (Var
+                        (src/lib/pickles/composition_types/composition_types.ml:643:14
+                         index))))))))) t
+                ((Tuple
+                  ((Top_app
+                    ((gid 513) (loc src/lib/pickles/limb_vector/constant.ml:60:6)
+                     (members
+                      ((t
+                        (()
+                         (Top_app
+                          ((gid 125) (loc src/int64.ml:6:6)
+                           (members ((t (() (Base int64 ())))))) t ())))))) t ())
+                   (Tuple
+                    ((Top_app
+                      ((gid 513) (loc src/lib/pickles/limb_vector/constant.ml:60:6)
+                       (members
+                        ((t
+                          (()
+                           (Top_app
+                            ((gid 125) (loc src/int64.ml:6:6)
+                             (members ((t (() (Base int64 ())))))) t ())))))) t ())
+                     (Base unit ())))))
+                 (Top_app
+                  ((gid 478)
+                   (loc src/lib/crypto/kimchi_backend/common/scalar_challenge.ml:6:4)
+                   (members
+                    ((t
+                      ((f)
+                       (Record
+                        ((inner
+                          (Var
+                           (src/lib/crypto/kimchi_backend/common/scalar_challenge.ml:6:61 f))))))))))
+                  t
+                  ((Tuple
+                    ((Top_app
+                      ((gid 513) (loc src/lib/pickles/limb_vector/constant.ml:60:6)
+                       (members
+                        ((t
+                          (()
+                           (Top_app
+                            ((gid 125) (loc src/int64.ml:6:6)
+                             (members ((t (() (Base int64 ())))))) t ())))))) t ())
+                     (Tuple
+                      ((Top_app
+                        ((gid 513) (loc src/lib/pickles/limb_vector/constant.ml:60:6)
+                         (members
+                          ((t
+                            (()
+                             (Top_app
+                              ((gid 125) (loc src/int64.ml:6:6)
+                               (members ((t (() (Base int64 ())))))) t ())))))) t ())
+                       (Base unit ())))))))
+                 (Top_app
+                  ((gid 458) (loc src/lib/pickles_types/shifted_value.ml:94:6)
+                   (members
+                    ((t
+                      ((f)
+                       (Variant
+                        ((Shifted_value
+                          ((Var (src/lib/pickles_types/shifted_value.ml:94:35 f)))))))))))
+                  t ((Base kimchi_backend_bigint_32_V1 ())))
+                 (Var (src/lib/pickles/proof.ml:58:16 messages_for_next_wrap_proof))
+                 (Top_app
+                  ((gid 517) (loc src/lib/pickles/composition_types/digest.ml:13:6)
+                   (members
+                    ((t
+                      (()
+                       (Tuple
+                        ((Top_app
+                          ((gid 513) (loc src/lib/pickles/limb_vector/constant.ml:60:6)
+                           (members
+                            ((t
+                              (()
+                               (Top_app
+                                ((gid 125) (loc src/int64.ml:6:6)
+                                 (members ((t (() (Base int64 ())))))) t ())))))) t ())
+                         (Tuple
+                          ((Top_app
+                            ((gid 513) (loc src/lib/pickles/limb_vector/constant.ml:60:6)
+                             (members
+                              ((t
+                                (()
+                                 (Top_app
+                                  ((gid 125) (loc src/int64.ml:6:6)
+                                   (members ((t (() (Base int64 ())))))) t ())))))) t ())
+                           (Tuple
+                            ((Top_app
+                              ((gid 513)
+                               (loc src/lib/pickles/limb_vector/constant.ml:60:6)
+                               (members
+                                ((t
+                                  (()
+                                   (Top_app
+                                    ((gid 125) (loc src/int64.ml:6:6)
+                                     (members ((t (() (Base int64 ())))))) t ())))))) t ())
+                             (Tuple
+                              ((Top_app
+                                ((gid 513)
+                                 (loc src/lib/pickles/limb_vector/constant.ml:60:6)
+                                 (members
+                                  ((t
+                                    (()
+                                     (Top_app
+                                      ((gid 125) (loc src/int64.ml:6:6)
+                                       (members ((t (() (Base int64 ())))))) t ())))))) t
+                                ()) (Base unit ())))))))))))))) t ())
+                 (Var (src/lib/pickles/proof.ml:60:16 messages_for_next_step_proof))
+                 (Top_app
+                  ((gid 485) (loc src/lib/crypto/kimchi_backend/pasta/basic.ml:53:8)
+                   (members
+                    ((t
+                      ((a)
+                       (Tuple
+                        ((Var (src/lib/crypto/kimchi_backend/pasta/basic.ml:53:20 a))
+                         (Tuple
+                          ((Var (src/lib/crypto/kimchi_backend/pasta/basic.ml:53:20 a))
+                           (Tuple
+                            ((Var (src/lib/crypto/kimchi_backend/pasta/basic.ml:53:20 a))
+                             (Tuple
+                              ((Var (src/lib/crypto/kimchi_backend/pasta/basic.ml:53:20 a))
+                               (Tuple
+                                ((Var
+                                  (src/lib/crypto/kimchi_backend/pasta/basic.ml:53:20 a))
+                                 (Tuple
+                                  ((Var
+                                    (src/lib/crypto/kimchi_backend/pasta/basic.ml:53:20 a))
+                                   (Tuple
+                                    ((Var
+                                      (src/lib/crypto/kimchi_backend/pasta/basic.ml:53:20 a))
+                                     (Tuple
+                                      ((Var
+                                        (src/lib/crypto/kimchi_backend/pasta/basic.ml:53:20
+                                         a))
+                                       (Tuple
+                                        ((Var
+                                          (src/lib/crypto/kimchi_backend/pasta/basic.ml:53:20
+                                           a))
+                                         (Tuple
+                                          ((Var
+                                            (src/lib/crypto/kimchi_backend/pasta/basic.ml:53:20
+                                             a))
+                                           (Tuple
+                                            ((Var
+                                              (src/lib/crypto/kimchi_backend/pasta/basic.ml:53:20
+                                               a))
+                                             (Tuple
+                                              ((Var
+                                                (src/lib/crypto/kimchi_backend/pasta/basic.ml:53:20
+                                                 a))
+                                               (Tuple
+                                                ((Var
+                                                  (src/lib/crypto/kimchi_backend/pasta/basic.ml:53:20
+                                                   a))
+                                                 (Tuple
+                                                  ((Var
+                                                    (src/lib/crypto/kimchi_backend/pasta/basic.ml:53:20
+                                                     a))
+                                                   (Tuple
+                                                    ((Var
+                                                      (src/lib/crypto/kimchi_backend/pasta/basic.ml:53:20
+                                                       a))
+                                                     (Tuple
+                                                      ((Var
+                                                        (src/lib/crypto/kimchi_backend/pasta/basic.ml:53:20
+                                                         a)) (Base unit ()))))))))))))))))))))))))))))))))))))))
+                  t
+                  ((Top_app
+                    ((gid 516)
+                     (loc src/lib/pickles/composition_types/bulletproof_challenge.ml:6:4)
+                     (members
+                      ((t
+                        ((challenge)
+                         (Record
+                          ((prechallenge
+                            (Var
+                             (src/lib/pickles/composition_types/bulletproof_challenge.ml:8:23
+                              challenge)))))))))) t
+                    ((Top_app
+                      ((gid 478)
+                       (loc src/lib/crypto/kimchi_backend/common/scalar_challenge.ml:6:4)
+                       (members
+                        ((t
+                          ((f)
+                           (Record
+                            ((inner
+                              (Var
+                               (src/lib/crypto/kimchi_backend/common/scalar_challenge.ml:6:61
+                                f)))))))))) t
+                      ((Tuple
+                        ((Top_app
+                          ((gid 513) (loc src/lib/pickles/limb_vector/constant.ml:60:6)
+                           (members
+                            ((t
+                              (()
+                               (Top_app
+                                ((gid 125) (loc src/int64.ml:6:6)
+                                 (members ((t (() (Base int64 ())))))) t ())))))) t ())
+                         (Tuple
+                          ((Top_app
+                            ((gid 513) (loc src/lib/pickles/limb_vector/constant.ml:60:6)
+                             (members
+                              ((t
+                                (()
+                                 (Top_app
+                                  ((gid 125) (loc src/int64.ml:6:6)
+                                   (members ((t (() (Base int64 ())))))) t ())))))) t ())
+                           (Base unit ())))))))))))
+                 (Top_app
+                  ((gid 515) (loc src/lib/pickles/composition_types/branch_data.ml:51:6)
+                   (members
+                    ((t
+                      (()
+                       (Record
+                        ((proofs_verified
+                          (Top_app
+                           ((gid 505) (loc src/lib/pickles_base/proofs_verified.ml:7:4)
+                            (members ((t (() (Variant ((N0 ()) (N1 ()) (N2 ())))))))) t ()))
+                         (domain_log2
+                          (Top_app
+                           ((gid 514)
+                            (loc src/lib/pickles/composition_types/branch_data.ml:24:8)
+                            (members
+                             ((t
+                               (()
+                                (Top_app
+                                 ((gid 161) (loc src/std_internal.ml:113:2)
+                                  (members
+                                   ((char
+                                     (()
+                                      (Top_app
+                                       ((gid 89) (loc src/char.ml:8:6)
+                                        (members ((t (() (Base char ())))))) t ()))))))
+                                 char ())))))) t ()))))))))) t ()))))
+              (prev_evals
+               (Top_app
+                ((gid 464) (loc src/lib/pickles_types/plonk_types.ml:489:6)
+                 (members
+                  ((t
+                    ((f f_multi)
+                     (Record
+                      ((evals
+                        (Top_app
+                         ((gid 463) (loc src/lib/pickles_types/plonk_types.ml:456:8)
+                          (members
+                           ((t
+                             ((f f_multi)
+                              (Record
+                               ((public_input
+                                 (Var (src/lib/pickles_types/plonk_types.ml:457:27 f)))
+                                (evals
+                                 (Top_app
+                                  ((gid 462)
+                                   (loc src/lib/pickles_types/plonk_types.ml:266:6)
+                                   (members
+                                    ((t
+                                      ((a)
+                                       (Record
+                                        ((w
+                                          (Tuple
+                                           ((Var
+                                             (src/lib/pickles_types/plonk_types.ml:267:14 a))
+                                            (Tuple
+                                             ((Var
+                                               (src/lib/pickles_types/plonk_types.ml:267:14
+                                                a))
+                                              (Tuple
+                                               ((Var
+                                                 (src/lib/pickles_types/plonk_types.ml:267:14
+                                                  a))
+                                                (Tuple
+                                                 ((Var
+                                                   (src/lib/pickles_types/plonk_types.ml:267:14
+                                                    a))
+                                                  (Tuple
+                                                   ((Var
+                                                     (src/lib/pickles_types/plonk_types.ml:267:14
+                                                      a))
+                                                    (Tuple
+                                                     ((Var
+                                                       (src/lib/pickles_types/plonk_types.ml:267:14
+                                                        a))
+                                                      (Tuple
+                                                       ((Var
+                                                         (src/lib/pickles_types/plonk_types.ml:267:14
+                                                          a))
+                                                        (Tuple
+                                                         ((Var
+                                                           (src/lib/pickles_types/plonk_types.ml:267:14
+                                                            a))
+                                                          (Tuple
+                                                           ((Var
+                                                             (src/lib/pickles_types/plonk_types.ml:267:14
+                                                              a))
+                                                            (Tuple
+                                                             ((Var
+                                                               (src/lib/pickles_types/plonk_types.ml:267:14
+                                                                a))
+                                                              (Tuple
+                                                               ((Var
+                                                                 (src/lib/pickles_types/plonk_types.ml:267:14
+                                                                  a))
+                                                                (Tuple
+                                                                 ((Var
+                                                                   (src/lib/pickles_types/plonk_types.ml:267:14
+                                                                    a))
+                                                                  (Tuple
+                                                                   ((Var
+                                                                     (src/lib/pickles_types/plonk_types.ml:267:14
+                                                                      a))
+                                                                    (Tuple
+                                                                     ((Var
+                                                                       (src/lib/pickles_types/plonk_types.ml:267:14
+                                                                        a))
+                                                                      (Tuple
+                                                                       ((Var
+                                                                         (src/lib/pickles_types/plonk_types.ml:267:14
+                                                                          a))
+                                                                        (Base unit ()))))))))))))))))))))))))))))))))
+                                         (z
+                                          (Var
+                                           (src/lib/pickles_types/plonk_types.ml:268:14 a)))
+                                         (s
+                                          (Tuple
+                                           ((Var
+                                             (src/lib/pickles_types/plonk_types.ml:269:14 a))
+                                            (Tuple
+                                             ((Var
+                                               (src/lib/pickles_types/plonk_types.ml:269:14
+                                                a))
+                                              (Tuple
+                                               ((Var
+                                                 (src/lib/pickles_types/plonk_types.ml:269:14
+                                                  a))
+                                                (Tuple
+                                                 ((Var
+                                                   (src/lib/pickles_types/plonk_types.ml:269:14
+                                                    a))
+                                                  (Tuple
+                                                   ((Var
+                                                     (src/lib/pickles_types/plonk_types.ml:269:14
+                                                      a))
+                                                    (Tuple
+                                                     ((Var
+                                                       (src/lib/pickles_types/plonk_types.ml:269:14
+                                                        a)) (Base unit ()))))))))))))))
+                                         (generic_selector
+                                          (Var
+                                           (src/lib/pickles_types/plonk_types.ml:270:29 a)))
+                                         (poseidon_selector
+                                          (Var
+                                           (src/lib/pickles_types/plonk_types.ml:271:30 a)))
+                                         (lookup
+                                          (Top_app
+                                           ((gid 169) (loc src/std_internal.ml:137:2)
+                                            (members
+                                             ((option
+                                               ((a)
+                                                (Top_app
+                                                 ((gid 60) (loc src/option.ml:4:0)
+                                                  (members
+                                                   ((t
+                                                     ((a)
+                                                      (Base option
+                                                       ((Var (src/option.ml:4:12 a)))))))))
+                                                 t
+                                                 ((Var (src/std_internal.ml:137:19 a)))))))))
+                                           option
+                                           ((Top_app
+                                             ((gid 461)
+                                              (loc
+                                               src/lib/pickles_types/plonk_types.ml:197:8)
+                                              (members
+                                               ((t
+                                                 ((f)
+                                                  (Record
+                                                   ((sorted
+                                                     (Top_app
+                                                      ((gid 159)
+                                                       (loc src/std_internal.ml:107:2)
+                                                       (members
+                                                        ((array
+                                                          ((a)
+                                                           (Top_app
+                                                            ((gid 33)
+                                                             (loc src/array.ml:12:0)
+                                                             (members
+                                                              ((t
+                                                                ((a)
+                                                                 (Base array
+                                                                  ((Var
+                                                                    (src/array.ml:12:12 a)))))))))
+                                                            t
+                                                            ((Var
+                                                              (src/std_internal.ml:107:18 a)))))))))
+                                                      array
+                                                      ((Var
+                                                        (src/lib/pickles_types/plonk_types.ml:198:21
+                                                         f)))))
+                                                    (aggreg
+                                                     (Var
+                                                      (src/lib/pickles_types/plonk_types.ml:198:40
+                                                       f)))
+                                                    (table
+                                                     (Var
+                                                      (src/lib/pickles_types/plonk_types.ml:198:52
+                                                       f)))
+                                                    (runtime
+                                                     (Top_app
+                                                      ((gid 169)
+                                                       (loc src/std_internal.ml:137:2)
+                                                       (members
+                                                        ((option
+                                                          ((a)
+                                                           (Top_app
+                                                            ((gid 60)
+                                                             (loc src/option.ml:4:0)
+                                                             (members
+                                                              ((t
+                                                                ((a)
+                                                                 (Base option
+                                                                  ((Var
+                                                                    (src/option.ml:4:12 a)))))))))
+                                                            t
+                                                            ((Var
+                                                              (src/std_internal.ml:137:19 a)))))))))
+                                                      option
+                                                      ((Var
+                                                        (src/lib/pickles_types/plonk_types.ml:198:66
+                                                         f)))))))))))) t
+                                             ((Var
+                                               (src/lib/pickles_types/plonk_types.ml:272:19
+                                                a)))))))))))))) t
+                                  ((Var
+                                    (src/lib/pickles_types/plonk_types.ml:457:39 f_multi))))))))))))
+                         t
+                         ((Tuple
+                           ((Var (src/lib/pickles_types/plonk_types.ml:490:19 f))
+                            (Var (src/lib/pickles_types/plonk_types.ml:490:24 f))))
+                          (Tuple
+                           ((Var (src/lib/pickles_types/plonk_types.ml:490:28 f_multi))
+                            (Var (src/lib/pickles_types/plonk_types.ml:490:39 f_multi)))))))
+                       (ft_eval1 (Var (src/lib/pickles_types/plonk_types.ml:491:21 f))))))))))
+                t
+                ((Base kimchi_backend_bigint_32_V1 ())
+                 (Top_app
+                  ((gid 159) (loc src/std_internal.ml:107:2)
+                   (members
+                    ((array
+                      ((a)
+                       (Top_app
+                        ((gid 33) (loc src/array.ml:12:0)
+                         (members
+                          ((t ((a) (Base array ((Var (src/array.ml:12:12 a))))))))) t
+                        ((Var (src/std_internal.ml:107:18 a))))))))) array
+                  ((Base kimchi_backend_bigint_32_V1 ()))))))
+              (proof
+               (Top_app
+                ((gid 493)
+                 (loc src/lib/crypto/kimchi_backend/common/plonk_dlog_proof.ml:160:6)
+                 (members
+                  ((t
+                    (()
+                     (Top_app
+                      ((gid 471) (loc src/lib/pickles_types/plonk_types.ml:738:6)
+                       (members
+                        ((t
+                          ((g fq fqv)
+                           (Record
+                            ((messages
+                              (Top_app
+                               ((gid 470) (loc src/lib/pickles_types/plonk_types.ml:689:6)
+                                (members
+                                 ((t
+                                   ((g)
+                                    (Record
+                                     ((w_comm
+                                       (Tuple
+                                        ((Top_app
+                                          ((gid 468)
+                                           (loc src/lib/pickles_types/plonk_types.ml:619:8)
+                                           (members
+                                            ((t
+                                              ((g)
+                                               (Top_app
+                                                ((gid 159) (loc src/std_internal.ml:107:2)
+                                                 (members
+                                                  ((array
+                                                    ((a)
+                                                     (Top_app
+                                                      ((gid 33) (loc src/array.ml:12:0)
+                                                       (members
+                                                        ((t
+                                                          ((a)
+                                                           (Base array
+                                                            ((Var (src/array.ml:12:12 a)))))))))
+                                                      t
+                                                      ((Var (src/std_internal.ml:107:18 a)))))))))
+                                                array
+                                                ((Var
+                                                  (src/lib/pickles_types/plonk_types.ml:619:20
+                                                   g))))))))) t
+                                          ((Var
+                                            (src/lib/pickles_types/plonk_types.ml:690:19 g))))
+                                         (Tuple
+                                          ((Top_app
+                                            ((gid 468)
+                                             (loc
+                                              src/lib/pickles_types/plonk_types.ml:619:8)
+                                             (members
+                                              ((t
+                                                ((g)
+                                                 (Top_app
+                                                  ((gid 159)
+                                                   (loc src/std_internal.ml:107:2)
+                                                   (members
+                                                    ((array
+                                                      ((a)
+                                                       (Top_app
+                                                        ((gid 33) (loc src/array.ml:12:0)
+                                                         (members
+                                                          ((t
+                                                            ((a)
+                                                             (Base array
+                                                              ((Var (src/array.ml:12:12 a)))))))))
+                                                        t
+                                                        ((Var
+                                                          (src/std_internal.ml:107:18 a)))))))))
+                                                  array
+                                                  ((Var
+                                                    (src/lib/pickles_types/plonk_types.ml:619:20
+                                                     g))))))))) t
+                                            ((Var
+                                              (src/lib/pickles_types/plonk_types.ml:690:19
+                                               g))))
+                                           (Tuple
+                                            ((Top_app
+                                              ((gid 468)
+                                               (loc
+                                                src/lib/pickles_types/plonk_types.ml:619:8)
+                                               (members
+                                                ((t
+                                                  ((g)
+                                                   (Top_app
+                                                    ((gid 159)
+                                                     (loc src/std_internal.ml:107:2)
+                                                     (members
+                                                      ((array
+                                                        ((a)
+                                                         (Top_app
+                                                          ((gid 33)
+                                                           (loc src/array.ml:12:0)
+                                                           (members
+                                                            ((t
+                                                              ((a)
+                                                               (Base array
+                                                                ((Var
+                                                                  (src/array.ml:12:12 a)))))))))
+                                                          t
+                                                          ((Var
+                                                            (src/std_internal.ml:107:18 a)))))))))
+                                                    array
+                                                    ((Var
+                                                      (src/lib/pickles_types/plonk_types.ml:619:20
+                                                       g))))))))) t
+                                              ((Var
+                                                (src/lib/pickles_types/plonk_types.ml:690:19
+                                                 g))))
+                                             (Tuple
+                                              ((Top_app
+                                                ((gid 468)
+                                                 (loc
+                                                  src/lib/pickles_types/plonk_types.ml:619:8)
+                                                 (members
+                                                  ((t
+                                                    ((g)
+                                                     (Top_app
+                                                      ((gid 159)
+                                                       (loc src/std_internal.ml:107:2)
+                                                       (members
+                                                        ((array
+                                                          ((a)
+                                                           (Top_app
+                                                            ((gid 33)
+                                                             (loc src/array.ml:12:0)
+                                                             (members
+                                                              ((t
+                                                                ((a)
+                                                                 (Base array
+                                                                  ((Var
+                                                                    (src/array.ml:12:12 a)))))))))
+                                                            t
+                                                            ((Var
+                                                              (src/std_internal.ml:107:18 a)))))))))
+                                                      array
+                                                      ((Var
+                                                        (src/lib/pickles_types/plonk_types.ml:619:20
+                                                         g))))))))) t
+                                                ((Var
+                                                  (src/lib/pickles_types/plonk_types.ml:690:19
+                                                   g))))
+                                               (Tuple
+                                                ((Top_app
+                                                  ((gid 468)
+                                                   (loc
+                                                    src/lib/pickles_types/plonk_types.ml:619:8)
+                                                   (members
+                                                    ((t
+                                                      ((g)
+                                                       (Top_app
+                                                        ((gid 159)
+                                                         (loc src/std_internal.ml:107:2)
+                                                         (members
+                                                          ((array
+                                                            ((a)
+                                                             (Top_app
+                                                              ((gid 33)
+                                                               (loc src/array.ml:12:0)
+                                                               (members
+                                                                ((t
+                                                                  ((a)
+                                                                   (Base array
+                                                                    ((Var
+                                                                      (src/array.ml:12:12 a)))))))))
+                                                              t
+                                                              ((Var
+                                                                (src/std_internal.ml:107:18
+                                                                 a))))))))) array
+                                                        ((Var
+                                                          (src/lib/pickles_types/plonk_types.ml:619:20
+                                                           g))))))))) t
+                                                  ((Var
+                                                    (src/lib/pickles_types/plonk_types.ml:690:19
+                                                     g))))
+                                                 (Tuple
+                                                  ((Top_app
+                                                    ((gid 468)
+                                                     (loc
+                                                      src/lib/pickles_types/plonk_types.ml:619:8)
+                                                     (members
+                                                      ((t
+                                                        ((g)
+                                                         (Top_app
+                                                          ((gid 159)
+                                                           (loc src/std_internal.ml:107:2)
+                                                           (members
+                                                            ((array
+                                                              ((a)
+                                                               (Top_app
+                                                                ((gid 33)
+                                                                 (loc src/array.ml:12:0)
+                                                                 (members
+                                                                  ((t
+                                                                    ((a)
+                                                                     (Base array
+                                                                      ((Var
+                                                                        (src/array.ml:12:12
+                                                                         a))))))))) t
+                                                                ((Var
+                                                                  (src/std_internal.ml:107:18
+                                                                   a))))))))) array
+                                                          ((Var
+                                                            (src/lib/pickles_types/plonk_types.ml:619:20
+                                                             g))))))))) t
+                                                    ((Var
+                                                      (src/lib/pickles_types/plonk_types.ml:690:19
+                                                       g))))
+                                                   (Tuple
+                                                    ((Top_app
+                                                      ((gid 468)
+                                                       (loc
+                                                        src/lib/pickles_types/plonk_types.ml:619:8)
+                                                       (members
+                                                        ((t
+                                                          ((g)
+                                                           (Top_app
+                                                            ((gid 159)
+                                                             (loc src/std_internal.ml:107:2)
+                                                             (members
+                                                              ((array
+                                                                ((a)
+                                                                 (Top_app
+                                                                  ((gid 33)
+                                                                   (loc src/array.ml:12:0)
+                                                                   (members
+                                                                    ((t
+                                                                      ((a)
+                                                                       (Base array
+                                                                        ((Var
+                                                                          (src/array.ml:12:12
+                                                                           a))))))))) t
+                                                                  ((Var
+                                                                    (src/std_internal.ml:107:18
+                                                                     a))))))))) array
+                                                            ((Var
+                                                              (src/lib/pickles_types/plonk_types.ml:619:20
+                                                               g))))))))) t
+                                                      ((Var
+                                                        (src/lib/pickles_types/plonk_types.ml:690:19
+                                                         g))))
+                                                     (Tuple
+                                                      ((Top_app
+                                                        ((gid 468)
+                                                         (loc
+                                                          src/lib/pickles_types/plonk_types.ml:619:8)
+                                                         (members
+                                                          ((t
+                                                            ((g)
+                                                             (Top_app
+                                                              ((gid 159)
+                                                               (loc
+                                                                src/std_internal.ml:107:2)
+                                                               (members
+                                                                ((array
+                                                                  ((a)
+                                                                   (Top_app
+                                                                    ((gid 33)
+                                                                     (loc src/array.ml:12:0)
+                                                                     (members
+                                                                      ((t
+                                                                        ((a)
+                                                                         (Base array
+                                                                          ((Var
+                                                                            (src/array.ml:12:12
+                                                                             a))))))))) t
+                                                                    ((Var
+                                                                      (src/std_internal.ml:107:18
+                                                                       a))))))))) array
+                                                              ((Var
+                                                                (src/lib/pickles_types/plonk_types.ml:619:20
+                                                                 g))))))))) t
+                                                        ((Var
+                                                          (src/lib/pickles_types/plonk_types.ml:690:19
+                                                           g))))
+                                                       (Tuple
+                                                        ((Top_app
+                                                          ((gid 468)
+                                                           (loc
+                                                            src/lib/pickles_types/plonk_types.ml:619:8)
+                                                           (members
+                                                            ((t
+                                                              ((g)
+                                                               (Top_app
+                                                                ((gid 159)
+                                                                 (loc
+                                                                  src/std_internal.ml:107:2)
+                                                                 (members
+                                                                  ((array
+                                                                    ((a)
+                                                                     (Top_app
+                                                                      ((gid 33)
+                                                                       (loc
+                                                                        src/array.ml:12:0)
+                                                                       (members
+                                                                        ((t
+                                                                          ((a)
+                                                                           (Base array
+                                                                            ((Var
+                                                                              (src/array.ml:12:12
+                                                                               a))))))))) t
+                                                                      ((Var
+                                                                        (src/std_internal.ml:107:18
+                                                                         a))))))))) array
+                                                                ((Var
+                                                                  (src/lib/pickles_types/plonk_types.ml:619:20
+                                                                   g))))))))) t
+                                                          ((Var
+                                                            (src/lib/pickles_types/plonk_types.ml:690:19
+                                                             g))))
+                                                         (Tuple
+                                                          ((Top_app
+                                                            ((gid 468)
+                                                             (loc
+                                                              src/lib/pickles_types/plonk_types.ml:619:8)
+                                                             (members
+                                                              ((t
+                                                                ((g)
+                                                                 (Top_app
+                                                                  ((gid 159)
+                                                                   (loc
+                                                                    src/std_internal.ml:107:2)
+                                                                   (members
+                                                                    ((array
+                                                                      ((a)
+                                                                       (Top_app
+                                                                        ((gid 33)
+                                                                         (loc
+                                                                          src/array.ml:12:0)
+                                                                         (members
+                                                                          ((t
+                                                                            ((a)
+                                                                             (Base array
+                                                                              ((Var
+                                                                                (src/array.ml:12:12
+                                                                                 a)))))))))
+                                                                        t
+                                                                        ((Var
+                                                                          (src/std_internal.ml:107:18
+                                                                           a))))))))) array
+                                                                  ((Var
+                                                                    (src/lib/pickles_types/plonk_types.ml:619:20
+                                                                     g))))))))) t
+                                                            ((Var
+                                                              (src/lib/pickles_types/plonk_types.ml:690:19
+                                                               g))))
+                                                           (Tuple
+                                                            ((Top_app
+                                                              ((gid 468)
+                                                               (loc
+                                                                src/lib/pickles_types/plonk_types.ml:619:8)
+                                                               (members
+                                                                ((t
+                                                                  ((g)
+                                                                   (Top_app
+                                                                    ((gid 159)
+                                                                     (loc
+                                                                      src/std_internal.ml:107:2)
+                                                                     (members
+                                                                      ((array
+                                                                        ((a)
+                                                                         (Top_app
+                                                                          ((gid 33)
+                                                                           (loc
+                                                                            src/array.ml:12:0)
+                                                                           (members
+                                                                            ((t
+                                                                              ((a)
+                                                                               (Base array
+                                                                                ((Var
+                                                                                  (src/array.ml:12:12
+                                                                                   a)))))))))
+                                                                          t
+                                                                          ((Var
+                                                                            (src/std_internal.ml:107:18
+                                                                             a)))))))))
+                                                                    array
+                                                                    ((Var
+                                                                      (src/lib/pickles_types/plonk_types.ml:619:20
+                                                                       g))))))))) t
+                                                              ((Var
+                                                                (src/lib/pickles_types/plonk_types.ml:690:19
+                                                                 g))))
+                                                             (Tuple
+                                                              ((Top_app
+                                                                ((gid 468)
+                                                                 (loc
+                                                                  src/lib/pickles_types/plonk_types.ml:619:8)
+                                                                 (members
+                                                                  ((t
+                                                                    ((g)
+                                                                     (Top_app
+                                                                      ((gid 159)
+                                                                       (loc
+                                                                        src/std_internal.ml:107:2)
+                                                                       (members
+                                                                        ((array
+                                                                          ((a)
+                                                                           (Top_app
+                                                                            ((gid 33)
+                                                                             (loc
+                                                                              src/array.ml:12:0)
+                                                                             (members
+                                                                              ((t
+                                                                                ((a)
+                                                                                 (Base
+                                                                                  array
+                                                                                  ((Var
+                                                                                    (src/array.ml:12:12
+                                                                                     a)))))))))
+                                                                            t
+                                                                            ((Var
+                                                                              (src/std_internal.ml:107:18
+                                                                               a)))))))))
+                                                                      array
+                                                                      ((Var
+                                                                        (src/lib/pickles_types/plonk_types.ml:619:20
+                                                                         g))))))))) t
+                                                                ((Var
+                                                                  (src/lib/pickles_types/plonk_types.ml:690:19
+                                                                   g))))
+                                                               (Tuple
+                                                                ((Top_app
+                                                                  ((gid 468)
+                                                                   (loc
+                                                                    src/lib/pickles_types/plonk_types.ml:619:8)
+                                                                   (members
+                                                                    ((t
+                                                                      ((g)
+                                                                       (Top_app
+                                                                        ((gid 159)
+                                                                         (loc
+                                                                          src/std_internal.ml:107:2)
+                                                                         (members
+                                                                          ((array
+                                                                            ((a)
+                                                                             (Top_app
+                                                                              ((gid 33)
+                                                                               (loc
+                                                                                src/array.ml:12:0)
+                                                                               (members
+                                                                                ((t
+                                                                                  ((a)
+                                                                                   (Base
+                                                                                    array
+                                                                                    ((Var
+                                                                                      (src/array.ml:12:12
+                                                                                       a)))))))))
+                                                                              t
+                                                                              ((Var
+                                                                                (src/std_internal.ml:107:18
+                                                                                 a)))))))))
+                                                                        array
+                                                                        ((Var
+                                                                          (src/lib/pickles_types/plonk_types.ml:619:20
+                                                                           g))))))))) t
+                                                                  ((Var
+                                                                    (src/lib/pickles_types/plonk_types.ml:690:19
+                                                                     g))))
+                                                                 (Tuple
+                                                                  ((Top_app
+                                                                    ((gid 468)
+                                                                     (loc
+                                                                      src/lib/pickles_types/plonk_types.ml:619:8)
+                                                                     (members
+                                                                      ((t
+                                                                        ((g)
+                                                                         (Top_app
+                                                                          ((gid 159)
+                                                                           (loc
+                                                                            src/std_internal.ml:107:2)
+                                                                           (members
+                                                                            ((array
+                                                                              ((a)
+                                                                               (Top_app
+                                                                                ((gid 33)
+                                                                                 (loc
+                                                                                  src/array.ml:12:0)
+                                                                                 (members
+                                                                                  ((t
+                                                                                    ((a)
+                                                                                     (Base
+                                                                                      array
+                                                                                      ((Var
+                                                                                        (src/array.ml:12:12
+                                                                                         a)))))))))
+                                                                                t
+                                                                                ((Var
+                                                                                  (src/std_internal.ml:107:18
+                                                                                   a)))))))))
+                                                                          array
+                                                                          ((Var
+                                                                            (src/lib/pickles_types/plonk_types.ml:619:20
+                                                                             g))))))))) t
+                                                                    ((Var
+                                                                      (src/lib/pickles_types/plonk_types.ml:690:19
+                                                                       g))))
+                                                                   (Tuple
+                                                                    ((Top_app
+                                                                      ((gid 468)
+                                                                       (loc
+                                                                        src/lib/pickles_types/plonk_types.ml:619:8)
+                                                                       (members
+                                                                        ((t
+                                                                          ((g)
+                                                                           (Top_app
+                                                                            ((gid 159)
+                                                                             (loc
+                                                                              src/std_internal.ml:107:2)
+                                                                             (members
+                                                                              ((array
+                                                                                ((a)
+                                                                                 (Top_app
+                                                                                  ((gid 33)
+                                                                                   (loc
+                                                                                    src/array.ml:12:0)
+                                                                                   (members
+                                                                                    ((t
+                                                                                      ((a)
+                                                                                       (Base
+                                                                                        array
+                                                                                        ((Var
+                                                                                          (src/array.ml:12:12
+                                                                                           a)))))))))
+                                                                                  t
+                                                                                  ((Var
+                                                                                    (src/std_internal.ml:107:18
+                                                                                     a)))))))))
+                                                                            array
+                                                                            ((Var
+                                                                              (src/lib/pickles_types/plonk_types.ml:619:20
+                                                                               g))))))))) t
+                                                                      ((Var
+                                                                        (src/lib/pickles_types/plonk_types.ml:690:19
+                                                                         g))))
+                                                                     (Base unit ()))))))))))))))))))))))))))))))))
+                                      (z_comm
+                                       (Top_app
+                                        ((gid 468)
+                                         (loc src/lib/pickles_types/plonk_types.ml:619:8)
+                                         (members
+                                          ((t
+                                            ((g)
+                                             (Top_app
+                                              ((gid 159) (loc src/std_internal.ml:107:2)
+                                               (members
+                                                ((array
+                                                  ((a)
+                                                   (Top_app
+                                                    ((gid 33) (loc src/array.ml:12:0)
+                                                     (members
+                                                      ((t
+                                                        ((a)
+                                                         (Base array
+                                                          ((Var (src/array.ml:12:12 a)))))))))
+                                                    t
+                                                    ((Var (src/std_internal.ml:107:18 a)))))))))
+                                              array
+                                              ((Var
+                                                (src/lib/pickles_types/plonk_types.ml:619:20
+                                                 g))))))))) t
+                                        ((Var
+                                          (src/lib/pickles_types/plonk_types.ml:691:19 g)))))
+                                      (t_comm
+                                       (Top_app
+                                        ((gid 468)
+                                         (loc src/lib/pickles_types/plonk_types.ml:619:8)
+                                         (members
+                                          ((t
+                                            ((g)
+                                             (Top_app
+                                              ((gid 159) (loc src/std_internal.ml:107:2)
+                                               (members
+                                                ((array
+                                                  ((a)
+                                                   (Top_app
+                                                    ((gid 33) (loc src/array.ml:12:0)
+                                                     (members
+                                                      ((t
+                                                        ((a)
+                                                         (Base array
+                                                          ((Var (src/array.ml:12:12 a)))))))))
+                                                    t
+                                                    ((Var (src/std_internal.ml:107:18 a)))))))))
+                                              array
+                                              ((Var
+                                                (src/lib/pickles_types/plonk_types.ml:619:20
+                                                 g))))))))) t
+                                        ((Var
+                                          (src/lib/pickles_types/plonk_types.ml:692:19 g)))))
+                                      (lookup
+                                       (Top_app
+                                        ((gid 169) (loc src/std_internal.ml:137:2)
+                                         (members
+                                          ((option
+                                            ((a)
+                                             (Top_app
+                                              ((gid 60) (loc src/option.ml:4:0)
+                                               (members
+                                                ((t
+                                                  ((a)
+                                                   (Base option
+                                                    ((Var (src/option.ml:4:12 a))))))))) t
+                                              ((Var (src/std_internal.ml:137:19 a)))))))))
+                                        option
+                                        ((Top_app
+                                          ((gid 469)
+                                           (loc src/lib/pickles_types/plonk_types.ml:639:8)
+                                           (members
+                                            ((t
+                                              ((g)
+                                               (Record
+                                                ((sorted
+                                                  (Top_app
+                                                   ((gid 159)
+                                                    (loc src/std_internal.ml:107:2)
+                                                    (members
+                                                     ((array
+                                                       ((a)
+                                                        (Top_app
+                                                         ((gid 33) (loc src/array.ml:12:0)
+                                                          (members
+                                                           ((t
+                                                             ((a)
+                                                              (Base array
+                                                               ((Var
+                                                                 (src/array.ml:12:12 a)))))))))
+                                                         t
+                                                         ((Var
+                                                           (src/std_internal.ml:107:18 a)))))))))
+                                                   array
+                                                   ((Var
+                                                     (src/lib/pickles_types/plonk_types.ml:639:31
+                                                      g)))))
+                                                 (aggreg
+                                                  (Var
+                                                   (src/lib/pickles_types/plonk_types.ml:639:50
+                                                    g)))
+                                                 (runtime
+                                                  (Top_app
+                                                   ((gid 169)
+                                                    (loc src/std_internal.ml:137:2)
+                                                    (members
+                                                     ((option
+                                                       ((a)
+                                                        (Top_app
+                                                         ((gid 60) (loc src/option.ml:4:0)
+                                                          (members
+                                                           ((t
+                                                             ((a)
+                                                              (Base option
+                                                               ((Var
+                                                                 (src/option.ml:4:12 a)))))))))
+                                                         t
+                                                         ((Var
+                                                           (src/std_internal.ml:137:19 a)))))))))
+                                                   option
+                                                   ((Var
+                                                     (src/lib/pickles_types/plonk_types.ml:639:64
+                                                      g)))))))))))) t
+                                          ((Top_app
+                                            ((gid 468)
+                                             (loc
+                                              src/lib/pickles_types/plonk_types.ml:619:8)
+                                             (members
+                                              ((t
+                                                ((g)
+                                                 (Top_app
+                                                  ((gid 159)
+                                                   (loc src/std_internal.ml:107:2)
+                                                   (members
+                                                    ((array
+                                                      ((a)
+                                                       (Top_app
+                                                        ((gid 33) (loc src/array.ml:12:0)
+                                                         (members
+                                                          ((t
+                                                            ((a)
+                                                             (Base array
+                                                              ((Var (src/array.ml:12:12 a)))))))))
+                                                        t
+                                                        ((Var
+                                                          (src/std_internal.ml:107:18 a)))))))))
+                                                  array
+                                                  ((Var
+                                                    (src/lib/pickles_types/plonk_types.ml:619:20
+                                                     g))))))))) t
+                                            ((Var
+                                              (src/lib/pickles_types/plonk_types.ml:693:19
+                                               g)))))))))))))))) t
+                               ((Var (src/lib/pickles_types/plonk_types.ml:739:21 g)))))
+                             (openings
+                              (Top_app
+                               ((gid 466) (loc src/lib/pickles_types/plonk_types.ml:558:6)
+                                (members
+                                 ((t
+                                   ((g fq fqv)
+                                    (Record
+                                     ((proof
+                                       (Top_app
+                                        ((gid 465)
+                                         (loc src/lib/pickles_types/plonk_types.ml:536:8)
+                                         (members
+                                          ((t
+                                            ((g fq)
+                                             (Record
+                                              ((lr
+                                                (Top_app
+                                                 ((gid 159)
+                                                  (loc src/std_internal.ml:107:2)
+                                                  (members
+                                                   ((array
+                                                     ((a)
+                                                      (Top_app
+                                                       ((gid 33) (loc src/array.ml:12:0)
+                                                        (members
+                                                         ((t
+                                                           ((a)
+                                                            (Base array
+                                                             ((Var (src/array.ml:12:12 a)))))))))
+                                                       t
+                                                       ((Var
+                                                         (src/std_internal.ml:107:18 a)))))))))
+                                                 array
+                                                 ((Tuple
+                                                   ((Var
+                                                     (src/lib/pickles_types/plonk_types.ml:537:18
+                                                      g))
+                                                    (Var
+                                                     (src/lib/pickles_types/plonk_types.ml:537:23
+                                                      g)))))))
+                                               (z_1
+                                                (Var
+                                                 (src/lib/pickles_types/plonk_types.ml:538:18
+                                                  fq)))
+                                               (z_2
+                                                (Var
+                                                 (src/lib/pickles_types/plonk_types.ml:539:18
+                                                  fq)))
+                                               (delta
+                                                (Var
+                                                 (src/lib/pickles_types/plonk_types.ml:540:20
+                                                  g)))
+                                               (challenge_polynomial_commitment
+                                                (Var
+                                                 (src/lib/pickles_types/plonk_types.ml:541:46
+                                                  g)))))))))) t
+                                        ((Var
+                                          (src/lib/pickles_types/plonk_types.ml:559:19 g))
+                                         (Var
+                                          (src/lib/pickles_types/plonk_types.ml:559:23 fq)))))
+                                      (evals
+                                       (Top_app
+                                        ((gid 462)
+                                         (loc src/lib/pickles_types/plonk_types.ml:266:6)
+                                         (members
+                                          ((t
+                                            ((a)
+                                             (Record
+                                              ((w
+                                                (Tuple
+                                                 ((Var
+                                                   (src/lib/pickles_types/plonk_types.ml:267:14
+                                                    a))
+                                                  (Tuple
+                                                   ((Var
+                                                     (src/lib/pickles_types/plonk_types.ml:267:14
+                                                      a))
+                                                    (Tuple
+                                                     ((Var
+                                                       (src/lib/pickles_types/plonk_types.ml:267:14
+                                                        a))
+                                                      (Tuple
+                                                       ((Var
+                                                         (src/lib/pickles_types/plonk_types.ml:267:14
+                                                          a))
+                                                        (Tuple
+                                                         ((Var
+                                                           (src/lib/pickles_types/plonk_types.ml:267:14
+                                                            a))
+                                                          (Tuple
+                                                           ((Var
+                                                             (src/lib/pickles_types/plonk_types.ml:267:14
+                                                              a))
+                                                            (Tuple
+                                                             ((Var
+                                                               (src/lib/pickles_types/plonk_types.ml:267:14
+                                                                a))
+                                                              (Tuple
+                                                               ((Var
+                                                                 (src/lib/pickles_types/plonk_types.ml:267:14
+                                                                  a))
+                                                                (Tuple
+                                                                 ((Var
+                                                                   (src/lib/pickles_types/plonk_types.ml:267:14
+                                                                    a))
+                                                                  (Tuple
+                                                                   ((Var
+                                                                     (src/lib/pickles_types/plonk_types.ml:267:14
+                                                                      a))
+                                                                    (Tuple
+                                                                     ((Var
+                                                                       (src/lib/pickles_types/plonk_types.ml:267:14
+                                                                        a))
+                                                                      (Tuple
+                                                                       ((Var
+                                                                         (src/lib/pickles_types/plonk_types.ml:267:14
+                                                                          a))
+                                                                        (Tuple
+                                                                         ((Var
+                                                                           (src/lib/pickles_types/plonk_types.ml:267:14
+                                                                            a))
+                                                                          (Tuple
+                                                                           ((Var
+                                                                             (src/lib/pickles_types/plonk_types.ml:267:14
+                                                                              a))
+                                                                            (Tuple
+                                                                             ((Var
+                                                                               (src/lib/pickles_types/plonk_types.ml:267:14
+                                                                                a))
+                                                                              (Base unit ()))))))))))))))))))))))))))))))))
+                                               (z
+                                                (Var
+                                                 (src/lib/pickles_types/plonk_types.ml:268:14
+                                                  a)))
+                                               (s
+                                                (Tuple
+                                                 ((Var
+                                                   (src/lib/pickles_types/plonk_types.ml:269:14
+                                                    a))
+                                                  (Tuple
+                                                   ((Var
+                                                     (src/lib/pickles_types/plonk_types.ml:269:14
+                                                      a))
+                                                    (Tuple
+                                                     ((Var
+                                                       (src/lib/pickles_types/plonk_types.ml:269:14
+                                                        a))
+                                                      (Tuple
+                                                       ((Var
+                                                         (src/lib/pickles_types/plonk_types.ml:269:14
+                                                          a))
+                                                        (Tuple
+                                                         ((Var
+                                                           (src/lib/pickles_types/plonk_types.ml:269:14
+                                                            a))
+                                                          (Tuple
+                                                           ((Var
+                                                             (src/lib/pickles_types/plonk_types.ml:269:14
+                                                              a)) (Base unit ()))))))))))))))
+                                               (generic_selector
+                                                (Var
+                                                 (src/lib/pickles_types/plonk_types.ml:270:29
+                                                  a)))
+                                               (poseidon_selector
+                                                (Var
+                                                 (src/lib/pickles_types/plonk_types.ml:271:30
+                                                  a)))
+                                               (lookup
+                                                (Top_app
+                                                 ((gid 169)
+                                                  (loc src/std_internal.ml:137:2)
+                                                  (members
+                                                   ((option
+                                                     ((a)
+                                                      (Top_app
+                                                       ((gid 60) (loc src/option.ml:4:0)
+                                                        (members
+                                                         ((t
+                                                           ((a)
+                                                            (Base option
+                                                             ((Var (src/option.ml:4:12 a)))))))))
+                                                       t
+                                                       ((Var
+                                                         (src/std_internal.ml:137:19 a)))))))))
+                                                 option
+                                                 ((Top_app
+                                                   ((gid 461)
+                                                    (loc
+                                                     src/lib/pickles_types/plonk_types.ml:197:8)
+                                                    (members
+                                                     ((t
+                                                       ((f)
+                                                        (Record
+                                                         ((sorted
+                                                           (Top_app
+                                                            ((gid 159)
+                                                             (loc src/std_internal.ml:107:2)
+                                                             (members
+                                                              ((array
+                                                                ((a)
+                                                                 (Top_app
+                                                                  ((gid 33)
+                                                                   (loc src/array.ml:12:0)
+                                                                   (members
+                                                                    ((t
+                                                                      ((a)
+                                                                       (Base array
+                                                                        ((Var
+                                                                          (src/array.ml:12:12
+                                                                           a))))))))) t
+                                                                  ((Var
+                                                                    (src/std_internal.ml:107:18
+                                                                     a))))))))) array
+                                                            ((Var
+                                                              (src/lib/pickles_types/plonk_types.ml:198:21
+                                                               f)))))
+                                                          (aggreg
+                                                           (Var
+                                                            (src/lib/pickles_types/plonk_types.ml:198:40
+                                                             f)))
+                                                          (table
+                                                           (Var
+                                                            (src/lib/pickles_types/plonk_types.ml:198:52
+                                                             f)))
+                                                          (runtime
+                                                           (Top_app
+                                                            ((gid 169)
+                                                             (loc src/std_internal.ml:137:2)
+                                                             (members
+                                                              ((option
+                                                                ((a)
+                                                                 (Top_app
+                                                                  ((gid 60)
+                                                                   (loc src/option.ml:4:0)
+                                                                   (members
+                                                                    ((t
+                                                                      ((a)
+                                                                       (Base option
+                                                                        ((Var
+                                                                          (src/option.ml:4:12
+                                                                           a))))))))) t
+                                                                  ((Var
+                                                                    (src/std_internal.ml:137:19
+                                                                     a))))))))) option
+                                                            ((Var
+                                                              (src/lib/pickles_types/plonk_types.ml:198:66
+                                                               f)))))))))))) t
+                                                   ((Var
+                                                     (src/lib/pickles_types/plonk_types.ml:272:19
+                                                      a)))))))))))))) t
+                                        ((Tuple
+                                          ((Var
+                                            (src/lib/pickles_types/plonk_types.ml:560:19
+                                             fqv))
+                                           (Var
+                                            (src/lib/pickles_types/plonk_types.ml:560:26
+                                             fqv)))))))
+                                      (ft_eval1
+                                       (Var
+                                        (src/lib/pickles_types/plonk_types.ml:561:21 fq))))))))))
+                               t
+                               ((Var (src/lib/pickles_types/plonk_types.ml:740:22 g))
+                                (Var (src/lib/pickles_types/plonk_types.ml:740:26 fq))
+                                (Var (src/lib/pickles_types/plonk_types.ml:740:31 fqv))))))))))))
+                      t
+                      ((Top_app
+                        ((gid 487)
+                         (loc src/lib/crypto/kimchi_backend/common/curve.ml:99:10)
+                         (members
+                          ((t
+                            (()
+                             (Tuple
+                              ((Base kimchi_backend_bigint_32_V1 ())
+                               (Base kimchi_backend_bigint_32_V1 ())))))))) t ())
+                       (Base kimchi_backend_bigint_32_V1 ())
+                       (Top_app
+                        ((gid 159) (loc src/std_internal.ml:107:2)
+                         (members
+                          ((array
+                            ((a)
+                             (Top_app
+                              ((gid 33) (loc src/array.ml:12:0)
+                               (members
+                                ((t ((a) (Base array ((Var (src/array.ml:12:12 a))))))))) t
+                              ((Var (src/std_internal.ml:107:18 a))))))))) array
+                        ((Base kimchi_backend_bigint_32_V1 ())))))))))) t ()))))))))) t
+       ((Top_app
+         ((gid 520) (loc src/lib/pickles/composition_types/composition_types.ml:342:10)
+          (members
+           ((t
+             ((g1 bulletproof_challenges)
+              (Record
+               ((challenge_polynomial_commitment
+                 (Var (src/lib/pickles/composition_types/composition_types.ml:349:48 g1)))
+                (old_bulletproof_challenges
+                 (Var
+                  (src/lib/pickles/composition_types/composition_types.ml:350:43
+                   bulletproof_challenges)))))))))) t
+         ((Top_app
+           ((gid 486) (loc src/lib/crypto/kimchi_backend/common/curve.ml:99:10)
+            (members
+             ((t
+               (()
+                (Tuple
+                 ((Base kimchi_backend_bigint_32_V1 ())
+                  (Base kimchi_backend_bigint_32_V1 ())))))))) t ())
+          (Tuple
+           ((Top_app
+             ((gid 527)
+              (loc src/lib/pickles/reduced_messages_for_next_proof_over_same_field.ml:53:8)
+              (members
+               ((t
+                 (()
+                  (Top_app
+                   ((gid 484) (loc src/lib/crypto/kimchi_backend/pasta/basic.ml:32:8)
+                    (members
+                     ((t
+                       ((a)
+                        (Tuple
+                         ((Var (src/lib/crypto/kimchi_backend/pasta/basic.ml:32:20 a))
+                          (Tuple
+                           ((Var (src/lib/crypto/kimchi_backend/pasta/basic.ml:32:20 a))
+                            (Tuple
+                             ((Var (src/lib/crypto/kimchi_backend/pasta/basic.ml:32:20 a))
+                              (Tuple
+                               ((Var
+                                 (src/lib/crypto/kimchi_backend/pasta/basic.ml:32:20 a))
+                                (Tuple
+                                 ((Var
+                                   (src/lib/crypto/kimchi_backend/pasta/basic.ml:32:20 a))
+                                  (Tuple
+                                   ((Var
+                                     (src/lib/crypto/kimchi_backend/pasta/basic.ml:32:20 a))
+                                    (Tuple
+                                     ((Var
+                                       (src/lib/crypto/kimchi_backend/pasta/basic.ml:32:20
+                                        a))
+                                      (Tuple
+                                       ((Var
+                                         (src/lib/crypto/kimchi_backend/pasta/basic.ml:32:20
+                                          a))
+                                        (Tuple
+                                         ((Var
+                                           (src/lib/crypto/kimchi_backend/pasta/basic.ml:32:20
+                                            a))
+                                          (Tuple
+                                           ((Var
+                                             (src/lib/crypto/kimchi_backend/pasta/basic.ml:32:20
+                                              a))
+                                            (Tuple
+                                             ((Var
+                                               (src/lib/crypto/kimchi_backend/pasta/basic.ml:32:20
+                                                a))
+                                              (Tuple
+                                               ((Var
+                                                 (src/lib/crypto/kimchi_backend/pasta/basic.ml:32:20
+                                                  a))
+                                                (Tuple
+                                                 ((Var
+                                                   (src/lib/crypto/kimchi_backend/pasta/basic.ml:32:20
+                                                    a))
+                                                  (Tuple
+                                                   ((Var
+                                                     (src/lib/crypto/kimchi_backend/pasta/basic.ml:32:20
+                                                      a))
+                                                    (Tuple
+                                                     ((Var
+                                                       (src/lib/crypto/kimchi_backend/pasta/basic.ml:32:20
+                                                        a)) (Base unit ()))))))))))))))))))))))))))))))))))))
+                   t
+                   ((Top_app
+                     ((gid 516)
+                      (loc src/lib/pickles/composition_types/bulletproof_challenge.ml:6:4)
+                      (members
+                       ((t
+                         ((challenge)
+                          (Record
+                           ((prechallenge
+                             (Var
+                              (src/lib/pickles/composition_types/bulletproof_challenge.ml:8:23
+                               challenge)))))))))) t
+                     ((Top_app
+                       ((gid 478)
+                        (loc src/lib/crypto/kimchi_backend/common/scalar_challenge.ml:6:4)
+                        (members
+                         ((t
+                           ((f)
+                            (Record
+                             ((inner
+                               (Var
+                                (src/lib/crypto/kimchi_backend/common/scalar_challenge.ml:6:61
+                                 f)))))))))) t
+                       ((Tuple
+                         ((Top_app
+                           ((gid 513) (loc src/lib/pickles/limb_vector/constant.ml:60:6)
+                            (members
+                             ((t
+                               (()
+                                (Top_app
+                                 ((gid 125) (loc src/int64.ml:6:6)
+                                  (members ((t (() (Base int64 ())))))) t ())))))) t ())
+                          (Tuple
+                           ((Top_app
+                             ((gid 513) (loc src/lib/pickles/limb_vector/constant.ml:60:6)
+                              (members
+                               ((t
+                                 (()
+                                  (Top_app
+                                   ((gid 125) (loc src/int64.ml:6:6)
+                                    (members ((t (() (Base int64 ())))))) t ())))))) t ())
+                            (Base unit ())))))))))))))))) t ())
+            (Tuple
+             ((Top_app
+               ((gid 527)
+                (loc
+                 src/lib/pickles/reduced_messages_for_next_proof_over_same_field.ml:53:8)
+                (members
+                 ((t
+                   (()
+                    (Top_app
+                     ((gid 484) (loc src/lib/crypto/kimchi_backend/pasta/basic.ml:32:8)
+                      (members
+                       ((t
+                         ((a)
+                          (Tuple
+                           ((Var (src/lib/crypto/kimchi_backend/pasta/basic.ml:32:20 a))
+                            (Tuple
+                             ((Var (src/lib/crypto/kimchi_backend/pasta/basic.ml:32:20 a))
+                              (Tuple
+                               ((Var
+                                 (src/lib/crypto/kimchi_backend/pasta/basic.ml:32:20 a))
+                                (Tuple
+                                 ((Var
+                                   (src/lib/crypto/kimchi_backend/pasta/basic.ml:32:20 a))
+                                  (Tuple
+                                   ((Var
+                                     (src/lib/crypto/kimchi_backend/pasta/basic.ml:32:20 a))
+                                    (Tuple
+                                     ((Var
+                                       (src/lib/crypto/kimchi_backend/pasta/basic.ml:32:20
+                                        a))
+                                      (Tuple
+                                       ((Var
+                                         (src/lib/crypto/kimchi_backend/pasta/basic.ml:32:20
+                                          a))
+                                        (Tuple
+                                         ((Var
+                                           (src/lib/crypto/kimchi_backend/pasta/basic.ml:32:20
+                                            a))
+                                          (Tuple
+                                           ((Var
+                                             (src/lib/crypto/kimchi_backend/pasta/basic.ml:32:20
+                                              a))
+                                            (Tuple
+                                             ((Var
+                                               (src/lib/crypto/kimchi_backend/pasta/basic.ml:32:20
+                                                a))
+                                              (Tuple
+                                               ((Var
+                                                 (src/lib/crypto/kimchi_backend/pasta/basic.ml:32:20
+                                                  a))
+                                                (Tuple
+                                                 ((Var
+                                                   (src/lib/crypto/kimchi_backend/pasta/basic.ml:32:20
+                                                    a))
+                                                  (Tuple
+                                                   ((Var
+                                                     (src/lib/crypto/kimchi_backend/pasta/basic.ml:32:20
+                                                      a))
+                                                    (Tuple
+                                                     ((Var
+                                                       (src/lib/crypto/kimchi_backend/pasta/basic.ml:32:20
+                                                        a))
+                                                      (Tuple
+                                                       ((Var
+                                                         (src/lib/crypto/kimchi_backend/pasta/basic.ml:32:20
+                                                          a)) (Base unit ()))))))))))))))))))))))))))))))))))))
+                     t
+                     ((Top_app
+                       ((gid 516)
+                        (loc src/lib/pickles/composition_types/bulletproof_challenge.ml:6:4)
+                        (members
+                         ((t
+                           ((challenge)
+                            (Record
+                             ((prechallenge
+                               (Var
+                                (src/lib/pickles/composition_types/bulletproof_challenge.ml:8:23
+                                 challenge)))))))))) t
+                       ((Top_app
+                         ((gid 478)
+                          (loc src/lib/crypto/kimchi_backend/common/scalar_challenge.ml:6:4)
+                          (members
+                           ((t
+                             ((f)
+                              (Record
+                               ((inner
+                                 (Var
+                                  (src/lib/crypto/kimchi_backend/common/scalar_challenge.ml:6:61
+                                   f)))))))))) t
+                         ((Tuple
+                           ((Top_app
+                             ((gid 513) (loc src/lib/pickles/limb_vector/constant.ml:60:6)
+                              (members
+                               ((t
+                                 (()
+                                  (Top_app
+                                   ((gid 125) (loc src/int64.ml:6:6)
+                                    (members ((t (() (Base int64 ())))))) t ())))))) t ())
+                            (Tuple
+                             ((Top_app
+                               ((gid 513)
+                                (loc src/lib/pickles/limb_vector/constant.ml:60:6)
+                                (members
+                                 ((t
+                                   (()
+                                    (Top_app
+                                     ((gid 125) (loc src/int64.ml:6:6)
+                                      (members ((t (() (Base int64 ())))))) t ())))))) t ())
+                              (Base unit ())))))))))))))))) t ()) (Base unit ())))))))
+        (Top_app
+         ((gid 526)
+          (loc src/lib/pickles/reduced_messages_for_next_proof_over_same_field.ml:16:6)
+          (members
+           ((t
+             ((s challenge_polynomial_commitments bpcs)
+              (Record
+               ((app_state
+                 (Var
+                  (src/lib/pickles/reduced_messages_for_next_proof_over_same_field.ml:25:22
+                   s)))
+                (challenge_polynomial_commitments
+                 (Var
+                  (src/lib/pickles/reduced_messages_for_next_proof_over_same_field.ml:26:45
+                   challenge_polynomial_commitments)))
+                (old_bulletproof_challenges
+                 (Var
+                  (src/lib/pickles/reduced_messages_for_next_proof_over_same_field.ml:27:39
+                   bpcs)))))))))) t
+         ((Top_app
+           ((gid 173) (loc src/std_internal.ml:148:2)
+            (members
+             ((unit
+               (()
+                (Top_app
+                 ((gid 139) (loc src/unit.ml:25:6) (members ((t (() (Base unit ())))))) t
+                 ())))))) unit ())
+          (Top_app
+           ((gid 59) (loc src/list.ml:56:4)
+            (members
+             ((t
+               ((a)
+                (Top_app
+                 ((gid 50) (loc src/list0.ml:6:0)
+                  (members ((t ((a) (Base list ((Var (src/list0.ml:6:12 a))))))))) t
+                 ((Var (src/list.ml:56:23 a))))))))) t
+           ((Top_app
+             ((gid 487) (loc src/lib/crypto/kimchi_backend/common/curve.ml:99:10)
+              (members
+               ((t
+                 (()
+                  (Tuple
+                   ((Base kimchi_backend_bigint_32_V1 ())
+                    (Base kimchi_backend_bigint_32_V1 ())))))))) t ())))
+          (Top_app
+           ((gid 59) (loc src/list.ml:56:4)
+            (members
+             ((t
+               ((a)
+                (Top_app
+                 ((gid 50) (loc src/list0.ml:6:0)
+                  (members ((t ((a) (Base list ((Var (src/list0.ml:6:12 a))))))))) t
+                 ((Var (src/list.ml:56:23 a))))))))) t
+           ((Top_app
+             ((gid 485) (loc src/lib/crypto/kimchi_backend/pasta/basic.ml:53:8)
+              (members
+               ((t
+                 ((a)
+                  (Tuple
+                   ((Var (src/lib/crypto/kimchi_backend/pasta/basic.ml:53:20 a))
+                    (Tuple
+                     ((Var (src/lib/crypto/kimchi_backend/pasta/basic.ml:53:20 a))
+                      (Tuple
+                       ((Var (src/lib/crypto/kimchi_backend/pasta/basic.ml:53:20 a))
+                        (Tuple
+                         ((Var (src/lib/crypto/kimchi_backend/pasta/basic.ml:53:20 a))
+                          (Tuple
+                           ((Var (src/lib/crypto/kimchi_backend/pasta/basic.ml:53:20 a))
+                            (Tuple
+                             ((Var (src/lib/crypto/kimchi_backend/pasta/basic.ml:53:20 a))
+                              (Tuple
+                               ((Var
+                                 (src/lib/crypto/kimchi_backend/pasta/basic.ml:53:20 a))
+                                (Tuple
+                                 ((Var
+                                   (src/lib/crypto/kimchi_backend/pasta/basic.ml:53:20 a))
+                                  (Tuple
+                                   ((Var
+                                     (src/lib/crypto/kimchi_backend/pasta/basic.ml:53:20 a))
+                                    (Tuple
+                                     ((Var
+                                       (src/lib/crypto/kimchi_backend/pasta/basic.ml:53:20
+                                        a))
+                                      (Tuple
+                                       ((Var
+                                         (src/lib/crypto/kimchi_backend/pasta/basic.ml:53:20
+                                          a))
+                                        (Tuple
+                                         ((Var
+                                           (src/lib/crypto/kimchi_backend/pasta/basic.ml:53:20
+                                            a))
+                                          (Tuple
+                                           ((Var
+                                             (src/lib/crypto/kimchi_backend/pasta/basic.ml:53:20
+                                              a))
+                                            (Tuple
+                                             ((Var
+                                               (src/lib/crypto/kimchi_backend/pasta/basic.ml:53:20
+                                                a))
+                                              (Tuple
+                                               ((Var
+                                                 (src/lib/crypto/kimchi_backend/pasta/basic.ml:53:20
+                                                  a))
+                                                (Tuple
+                                                 ((Var
+                                                   (src/lib/crypto/kimchi_backend/pasta/basic.ml:53:20
+                                                    a)) (Base unit ()))))))))))))))))))))))))))))))))))))))
+             t
+             ((Top_app
+               ((gid 516)
+                (loc src/lib/pickles/composition_types/bulletproof_challenge.ml:6:4)
+                (members
+                 ((t
+                   ((challenge)
+                    (Record
+                     ((prechallenge
+                       (Var
+                        (src/lib/pickles/composition_types/bulletproof_challenge.ml:8:23
+                         challenge)))))))))) t
+               ((Top_app
+                 ((gid 478)
+                  (loc src/lib/crypto/kimchi_backend/common/scalar_challenge.ml:6:4)
+                  (members
+                   ((t
+                     ((f)
+                      (Record
+                       ((inner
+                         (Var
+                          (src/lib/crypto/kimchi_backend/common/scalar_challenge.ml:6:61 f))))))))))
+                 t
+                 ((Tuple
+                   ((Top_app
+                     ((gid 513) (loc src/lib/pickles/limb_vector/constant.ml:60:6)
+                      (members
+                       ((t
+                         (()
+                          (Top_app
+                           ((gid 125) (loc src/int64.ml:6:6)
+                            (members ((t (() (Base int64 ())))))) t ())))))) t ())
+                    (Tuple
+                     ((Top_app
+                       ((gid 513) (loc src/lib/pickles/limb_vector/constant.ml:60:6)
+                        (members
+                         ((t
+                           (()
+                            (Top_app
+                             ((gid 125) (loc src/int64.ml:6:6)
+                              (members ((t (() (Base int64 ())))))) t ())))))) t ())
+                      (Base unit ())))))))))))))))))))))) t ())

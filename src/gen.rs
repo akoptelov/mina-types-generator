@@ -328,6 +328,16 @@ impl<'a> Generator<'a> {
         }
     }
 
+    pub fn generate_all(&mut self) -> TokenStream {
+        self.xref
+            .names()
+            .map(|name| self.generate(name))
+            .fold(TokenStream::new(), |mut res, ts| {
+                res.extend(ts);
+                res
+            })
+    }
+
     pub fn generate_types<T, I>(&mut self, types: I) -> TokenStream
     where
         T: 'a + AsRef<str>,
@@ -1248,106 +1258,69 @@ fn base_types() -> HashMap<String, BaseTypeMapping> {
     ])
 }
 
-#[cfg(test)]
-mod tests {
-
-    mod names {
-        use quote::ToTokens;
-
-        #[test]
-        fn versioned_type_name() {
-            assert_eq!(
-                super::super::Generator::get_name_and_version("Mod.Stable.V1.t")
-                    .map(|(n, v)| (n, v.to_token_stream().to_string()))
-                    .unwrap(),
-                (String::from("ModStableV1"), "1".to_string())
-            );
-            assert!(matches!(
-                super::super::Generator::get_name_and_version("Mod.Stable.V1")
-                    .map(|_| ())
-                    .unwrap_err(),
-                super::super::Error::NoVersion(_)
-            ));
-        }
-    }
-
-    mod type_ref {
-        use crate::{
-            gen::{ConfigBuilder, Generator},
-            shape::Expression,
-            xref::XRef,
-        };
-
-        fn gen_ref(expr: &str) -> String {
-            let expr: Expression = expr.parse().unwrap();
-            let binding: [(String, Expression); 0] = [];
-            let xref = XRef::new(&binding).unwrap();
-            let ts = Generator::new(&xref, ConfigBuilder::default().build().unwrap())
-                .type_reference(None, &expr);
-            ts.to_string()
-        }
-
-        #[test]
-        fn base_type_builtins() {
-            assert_eq!(gen_ref("(Base bool ())"), "bool");
-            assert_eq!(gen_ref("(Base string ())"), "String");
-            assert_eq!(gen_ref("(Base int ())"), "i32");
-            assert_eq!(gen_ref("(Base int32 ())"), "i32");
-            assert_eq!(gen_ref("(Base unit ())"), "()");
-            assert_eq!(gen_ref("(Base kimchi_backend_bigint_32_V1 ())"), "BigInt");
-        }
-
-        #[test]
-        fn base_type() {
-            assert_eq!(gen_ref("(Base option ((Base int ())))"), "Option < i32 >");
-            assert_eq!(gen_ref("(Base list ((Base int ())))"), "Vec < i32 >");
-            assert_eq!(gen_ref("(Base array ((Base int ())))"), "Vec < i32 >");
-        }
-    }
-
-    mod others {
-        use rust_format::{Formatter, RustFmt};
-
-        use crate::{
-            gen::{ConfigBuilder, Generator},
-            shape::Expression,
-            xref::XRef,
-        };
-
-        #[test]
-        fn preamble() {
-            let preamble = "pub type BigInt = [u8; 32];";
-            let expr = r#"(Top_app
- ((gid 586) (loc src/lib/data_hash_lib/state_hash.ml:42:4)
-  (members ((t (() (Base kimchi_backend_bigint_32_V1 ()))))))
- t ())"#;
-            let rust = r#"pub type BigInt = [u8; 32];
-pub type MyType = BigInt;
-"#;
-            let expr: Expression = expr.parse().unwrap();
-            let binding = [("MyType", expr.clone())];
-            let xref = XRef::new(&binding).unwrap();
-            let ts = Generator::new(
-                &xref,
-                ConfigBuilder::default()
-                    .preamble(preamble.parse().unwrap())
-                    .build()
-                    .unwrap(),
-            )
-            .generate("MyType");
-            eprintln!("{ts}");
-            let rust_act = RustFmt::default().format_tokens(ts.into()).unwrap();
-            assert_eq!(rust, rust_act);
-        }
-    }
-
-    mod toml {
-        #[test]
-        #[ignore]
-        fn serialize() {
-            let config = super::super::ConfigBuilder::default().build().unwrap();
-            let toml = toml::to_string_pretty(&config).unwrap();
-            println!("==========\n{toml}\n========");
-        }
-    }
+#[macro_export]
+macro_rules! base {
+    ($uuid:expr) => {
+        Expression::Base($uuid.into(), Vec::new())
+    };
+    ($uuid:expr, $arg:expr) => {
+        Expression::Base($uuid.into(), vec![expr])
+    };
 }
+
+#[macro_export]
+macro_rules! top_app {
+    ($gid:expr, $expr:expr) => {
+        crate::shape::Expression::Top_app(
+            crate::shape::Group {
+                gid: $gid,
+                loc: String::new(),
+                members: vec![(String::from("t"), (vec![], $expr))],
+            },
+            String::from("t"),
+            Vec::new(),
+        )
+    };
+    ($gid:expr, $expr:expr, $($vid:ident => $arg:expr),* $(,)?) => {
+        crate::shape::Expression::Top_app(
+            crate::shape::Group {
+                gid: $gid,
+                loc: String::new(),
+                members: vec![(String::from("t"), (vec![$(stringify!($vid).into()),*], $expr))],
+            },
+            String::from("t"),
+            vec![$($arg.clone()),*],
+        )
+    };
+}
+
+#[macro_export]
+macro_rules! record {
+    ($($arg:ident: $ty:expr),* $(,)?) => {
+        crate::shape::Expression::Record(
+            vec![
+                $( (stringify!($arg).into(), $ty.clone()) ),*
+            ]
+        )
+    };
+}
+
+#[macro_export]
+macro_rules! tuple {
+    ($($item:expr),* $(,)?) => {
+        crate::shape::Expression::Tuple(vec![$($item.clone()),*])
+    };
+}
+
+#[macro_export]
+macro_rules! var {
+    ($var:ident) => {
+        var!(stringify!($var))
+    };
+    ($var:expr) => {
+        crate::shape::Expression::Var((String::new(), $var.into()))
+    };
+}
+
+#[cfg(test)]
+mod tests;
