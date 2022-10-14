@@ -53,6 +53,28 @@ pub fn gen_type(name: &str, types: &[(&str, &str)]) -> TokenStream {
     // res
 }
 
+pub fn gen_types(types: &[(&str, &str)]) -> TokenStream {
+    let bindings = types
+        .iter()
+        .map(|(n, e)| (n, e.parse::<Expression>().unwrap()))
+        .collect::<Vec<_>>();
+    let xref = XRef::new(&bindings).unwrap();
+    Generator::new(
+        &xref,
+        ConfigBuilder::default()
+            .versioned_type(quote!(Versioned))
+            // .generate_comments(true)
+            // .git_prefix("https://github.com/MinaProtocol/mina/blob/b14f0da9ebae87acd8764388ab4681ca10f07c89/")
+            .build()
+            .unwrap(),
+    )
+    .generate_types(types.iter().map(|(name, _)| name))
+    // eprintln!("====\n{ts}\n====");
+    // let res = RustFmt::default().format_tokens(ts.into()).unwrap();
+    // eprintln!("====\n{res}\n====");
+    // res
+}
+
 pub fn gen_type_ref(name: &str, types: &[(&str, &str)]) -> TokenStream {
     let bindings = types
         .iter()
