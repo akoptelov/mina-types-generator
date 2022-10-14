@@ -1,17 +1,19 @@
 use std::{
     cmp::Ordering,
-    fs::File,
+    fs::{File, self},
     io::{BufRead, BufReader, Read, Write},
+    path::{Path, PathBuf},
 };
 
 use anyhow::{bail, format_err, Result};
 use bin_prot_rs::{
     doc::Doc,
-    shape::Expression,
+    shape::{Expression, Group, PolyConstr},
     visit::{Visiting, Visitor},
     xref::{NamedShape, XRef},
 };
-use clap::{ArgEnum, Parser, Subcommand};
+use clap::{ArgEnum, Args, Parser, Subcommand};
+use rsexp::SexpOf;
 use rust_format::{Formatter, RustFmt};
 
 #[derive(Parser)]
@@ -24,6 +26,18 @@ struct Cli {
 
     #[clap(subcommand)]
     command: Commands,
+}
+
+#[derive(Args)]
+struct Gen {
+    #[clap(short, long)]
+    _type: Vec<String>,
+    #[clap(short, long)]
+    all: bool,
+    #[clap(short, long)]
+    config: Option<PathBuf>,
+    #[clap(short, long)]
+    out: Option<PathBuf>,
 }
 
 #[derive(Subcommand)]
@@ -40,16 +54,71 @@ enum Commands {
         #[clap(short, long)]
         all: bool,
     },
-    Gen {
-        #[clap(short, long)]
-        _type: Vec<String>,
-        #[clap(short, long)]
-        all: bool,
-        #[clap(short, long)]
-        config: Option<String>,
-        #[clap(short, long)]
-        out: Option<String>,
-    },
+    Gen(Gen),
+    Dump(Dump),
+}
+
+#[derive(Args)]
+struct Dump {
+    #[clap(short, long)]
+    _type: Vec<String>,
+    #[clap(short, long)]
+    dir: Option<PathBuf>,
+}
+
+impl Dump {
+    fn run(self, shapes: Vec<Type>) -> Result<()> {
+        let dir = self.dir.unwrap_or_default();
+        if !dir.exists() {
+            fs::create_dir_all(&dir)?;
+        } else if !dir.is_dir() {
+            bail!("{dir:?} is not a directory");
+        }
+        let xref = XRef::new(&shapes)?;
+        for name in self._type {
+            let expr = xref
+                .expr_for_name(&name)
+                .ok_or(anyhow::format_err!("no expr for {name}"))?;
+            Self::dump(&xref, expr, &dir)?;
+        }
+        Ok(())
+    }
+
+    fn dump(xref: &XRef, expr: &Expression, dir: &Path) -> Result<()> {
+        let map = |expr| Self::dump(xref, expr, dir);
+        match expr {
+            Expression::Annotate(_, _) => todo!(),
+            Expression::Base(_, exprs) => exprs.iter().try_for_each(map),
+            Expression::Record(fields) => fields.iter().map(|(_, expr)| expr).try_for_each(map),
+            Expression::Variant(alts) => alts
+                .iter()
+                .flat_map(|(_, exprs)| exprs.iter())
+                .try_for_each(map),
+            Expression::Tuple(exprs) => exprs.iter().try_for_each(map),
+            Expression::Poly_variant((_, constrs)) => {
+                constrs.iter().try_for_each(|constr| match constr {
+                    PolyConstr::Constr((_, opt_expr)) => {
+                        opt_expr.iter().map(Box::as_ref).try_for_each(map)
+                    }
+                    PolyConstr::Inherit((_, expr)) => map(expr),
+                })
+            }
+            Expression::Var(_) => Ok(()),
+            Expression::Rec_app(_, exprs) => exprs.iter().try_for_each(map),
+            Expression::Top_app(Group { gid, members, .. }, _, args) => {
+                if let Some(name) = xref.for_gid(*gid).and_then(|(_, name)| name) {
+                    let mut file = PathBuf::from(dir).join(name);
+                    file.set_extension("shape");
+                    expr.sexp_of().write_hum(&mut File::create(&file)?)?;
+                }
+                members
+                    .iter()
+                    .map(|(_, (_, expr))| expr)
+                    .try_for_each(map)?;
+                args.iter().try_for_each(map)
+            }
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
@@ -122,12 +191,8 @@ fn main() -> Result<()> {
             Ok(())
         }
         Commands::Doc { _type, all } => doc(shapes, _type, all),
-        Commands::Gen {
-            _type,
-            all,
-            config,
-            out,
-        } => gen(shapes, _type, all, config, out),
+        Commands::Gen(gen) => gen.run(shapes),
+        Commands::Dump(dump) => dump.run(shapes),
     }
 
     //    let mut gen = Generator::new(&types)?;
@@ -171,57 +236,53 @@ fn doc(shapes: Vec<Type>, _types: Vec<String>, all: bool) -> Result<()> {
     Ok(())
 }
 
-fn gen(
-    shapes: Vec<Type>,
-    _types: Vec<String>,
-    all: bool,
-    config: Option<String>,
-    out: Option<String>,
-) -> Result<()> {
-    if _types.is_empty() != all {
-        bail!("should be either --type or --all");
-    }
+impl Gen {
+    fn run(self, shapes: Vec<Type>) -> Result<()> {
+        if self._type.is_empty() != self.all {
+            bail!("should be either --type or --all");
+        }
 
-    let xref = XRef::new(&shapes)?;
-    let git_base =
-        "https://github.com/MinaProtocol/mina/blob/b14f0da9ebae87acd8764388ab4681ca10f07c89/";
+        let xref = XRef::new(&shapes)?;
+        let git_base =
+            "https://github.com/MinaProtocol/mina/blob/b14f0da9ebae87acd8764388ab4681ca10f07c89/";
 
-    let config = if let Some(config) = config {
-        let mut buf = Vec::new();
-        File::open(config)?.read_to_end(&mut buf)?;
-        toml::from_slice(&buf)?
-    } else {
-        bin_prot_rs::gen::ConfigBuilder::default()
-            .generate_comments(true)
-            .blank_lines(true)
-            .git_prefix(git_base)
-            .build()?
-    };
-    let mut gen = bin_prot_rs::gen::Generator::new(&xref, config);
-    let ts = if all {
-        gen.generate_types(xref.names())
-    } else {
-        gen.generate_types(&_types)
-    };
-    let config = rust_format::Config::new_str()
-        .post_proc(rust_format::PostProcess::ReplaceMarkersAndDocBlocks);
+        let config = if let Some(config) = self.config {
+            let mut buf = Vec::new();
+            File::open(config)?.read_to_end(&mut buf)?;
+            toml::from_slice(&buf)?
+        } else {
+            bin_prot_rs::gen::ConfigBuilder::default()
+                .generate_comments(true)
+                .blank_lines(true)
+                .git_prefix(git_base)
+                .build()?
+        };
+        let mut gen = bin_prot_rs::gen::Generator::new(&xref, config);
+        let ts = if self.all {
+            gen.generate_types(xref.names())
+        } else {
+            gen.generate_types(&self._type)
+        };
+        let config = rust_format::Config::new_str()
+            .post_proc(rust_format::PostProcess::ReplaceMarkersAndDocBlocks);
 
-    match RustFmt::from_config(config).format_tokens(ts.into()) {
-        Ok(res) => {
-            if let Some(out) = out {
-                File::create(out)?.write_all(res.as_bytes())?;
-            } else {
-                std::io::stdout().write_all(res.as_bytes())?;
+        match RustFmt::from_config(config).format_tokens(ts.into()) {
+            Ok(res) => {
+                if let Some(out) = self.out {
+                    File::create(out)?.write_all(res.as_bytes())?;
+                } else {
+                    std::io::stdout().write_all(res.as_bytes())?;
+                }
+            }
+            Err(rust_format::Error::BadSourceCode(err)) => {
+                eprintln!("Error formatting tokens\n{err}")
+            }
+            Err(err) => {
+                eprintln!("Error formatting tokens: {err}")
             }
         }
-        Err(rust_format::Error::BadSourceCode(err)) => {
-            eprintln!("Error formatting tokens\n{err}")
-        }
-        Err(err) => {
-            eprintln!("Error formatting tokens: {err}")
-        }
+        Ok(())
     }
-    Ok(())
 }
 
 struct Type {
