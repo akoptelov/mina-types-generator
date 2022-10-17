@@ -61,21 +61,17 @@ const SEXP: &str = r#"
            t ()))))))))))
  t ())
 "#;
-const RUST: &str = r#"pub struct Type(pub TypePoly<TypePolyArg0<TypePolyArg0Arg0>>);
-pub struct TypePoly<Balance> {
-    pub balance: Balance,
+const RUST: &str = r#"pub struct Type {
+    pub balance: TypeBalance,
 }
-pub enum TypePolyArg0Poly<A> {
-    Check(A),
+pub struct TypeBalanceA {
+    pub lower: i64,
+    pub upper: i64,
+}
+pub enum TypeBalance {
+    Check(TypeBalanceA),
     Ignore,
 }
-pub struct TypePolyArg0PolyArg0<A> {
-    pub lower: A,
-    pub upper: A,
-}
-pub struct TypePolyArg0<A>(pub TypePolyArg0Poly<TypePolyArg0PolyArg0<A>>);
-pub struct TypePolyArg0Arg0Poly(pub i64);
-pub struct TypePolyArg0Arg0(pub TypePolyArg0Arg0Poly);
 "#;
 
 #[test]

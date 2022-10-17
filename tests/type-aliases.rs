@@ -33,8 +33,8 @@ const UINT64: &str = r#"(Top_app
  ())"#;
 
 const RUST: &str = r#"pub struct Balance(pub Amount);
-pub struct Uint64(pub i64);
 pub struct Amount(pub Uint64);
+pub struct Uint64(pub i64);
 "#;
 
 #[test]

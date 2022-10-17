@@ -1,4 +1,4 @@
-pub type Collection = Vec<Vec<Item>>;
+pub struct Collection(pub Vec<Vec<Item>>);
 pub enum Item {
     Predicate,
     SourceNotPresent,

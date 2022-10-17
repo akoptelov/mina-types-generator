@@ -2,6 +2,7 @@ mod utils;
 use utils::*;
 
 #[test]
+#[ignore = "TODO versioned is not yet supported"]
 fn sgn() {
     let shape = include_str!("files/versioned/sgn.shape");
     let rust = include_str!("files/versioned/sgn.rs");

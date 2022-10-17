@@ -82,6 +82,6 @@ fn top_app() {
              t ())"#
         )
         .to_string(),
-        "String"
+        "Top"
     );
 }

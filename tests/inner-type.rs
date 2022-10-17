@@ -8,17 +8,15 @@ fn inner_type() {
     let pending_coinbase_stack_state =
         include_str!("files/inner-type/pending-coinbase-stack-state.shape");
     let rust = include_str!("files/inner-type/inner-type.rs");
-
-    assert_eq!(
-        format(gen_type(
-            "PendingCoinbaseStackState",
-            &[
-                ("PendingCoinbaseStackState", pending_coinbase_stack_state),
-                ("StackVersioned", stack_versioned),
-                ("StateStack", state_stack)
-            ],
-        ))
-        .unwrap(),
-        rust
-    );
+    let rs = format(gen_type(
+        "PendingCoinbaseStackState",
+        &[
+            ("PendingCoinbaseStackState", pending_coinbase_stack_state),
+            ("StackVersioned", stack_versioned),
+            ("StateStack", state_stack),
+        ],
+    ))
+    .unwrap();
+    println!("{rs}");
+    assert_eq!(rs, rust);
 }

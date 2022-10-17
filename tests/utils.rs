@@ -21,14 +21,16 @@ pub fn gen_ref(expr: &str) -> TokenStream {
     let expr: Expression = expr.parse().unwrap();
     let binding: [(String, Expression); 0] = [];
     let xref = XRef::new(&binding).unwrap();
-    Generator::new(&xref, ConfigBuilder::default().build().unwrap()).type_reference(None, &expr)
+    Generator::new(&xref, ConfigBuilder::default().build().unwrap())
+        .generate_type(Default::default(), &expr)
 }
 
 pub fn gen_ref_top(name: &str, expr: &str) -> TokenStream {
     let expr: Expression = expr.parse().unwrap();
     let binding = [(name, expr.clone())];
     let xref = XRef::new(&binding).unwrap();
-    Generator::new(&xref, ConfigBuilder::default().build().unwrap()).type_reference(None, &expr)
+    Generator::new(&xref, ConfigBuilder::default().build().unwrap())
+        .generate_type(Default::default(), &expr)
 }
 
 pub fn gen_type(name: &str, types: &[(&str, &str)]) -> TokenStream {
@@ -91,7 +93,7 @@ pub fn gen_type_ref(name: &str, types: &[(&str, &str)]) -> TokenStream {
             .build()
             .unwrap(),
     )
-    .type_reference(None, expr)
+    .generate_type(Default::default(), expr)
     // eprintln!("====\n{ts}\n====");
     // let res = RustFmt::default().format_tokens(ts.into()).unwrap();
     // eprintln!("====\n{res}\n====");
