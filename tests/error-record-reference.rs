@@ -99,11 +99,11 @@ const SEXP: &str = r#"
 "#;
 const RUST: &str = r#"pub enum Type {
     SetDelegate {
-        delegator: TypeSetDelegateDelegatorDelegator,
-        new_delegate: TypeSetDelegateDelegatorDelegator,
+        delegator: TypeSetDelegateDelegator,
+        new_delegate: TypeSetDelegateDelegator,
     },
 }
-pub struct TypeSetDelegateDelegatorDelegator {
+pub struct TypeSetDelegateDelegator {
     pub x: BigInt,
     pub is_odd: bool,
 }

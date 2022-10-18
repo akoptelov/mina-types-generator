@@ -13,7 +13,7 @@ use crate::xref::XRef;
 
 use super::shape::*;
 
-type Venv<'a> = BTreeMap<&'a str, TokenStream>;
+type Venv<'a> = BTreeMap<&'a str, (TokenStream, usize)>;
 type Tenv<'a> = BTreeMap<&'a str, (Context<'a>, &'a [Vid])>;
 
 macro_rules! gen_error {
@@ -81,6 +81,12 @@ pub enum Error<'a> {
 impl<'a> From<Error<'a>> for TokenStream {
     fn from(source: Error<'a>) -> Self {
         gen_error!("{source}")
+    }
+}
+
+impl<'a> From<Error<'a>> for (TokenStream, usize) {
+    fn from(source: Error<'a>) -> Self {
+        (gen_error!("{source}"), 0)
     }
 }
 
@@ -244,14 +250,16 @@ struct GeneratedType<'a> {
     ctx: Context<'a>,
     type_ref: TokenStream,
     type_def: TokenStream,
+    size: usize,
 }
 
 impl<'a> GeneratedType<'a> {
-    fn new(ctx: &Context<'a>, type_ref: TokenStream, type_def: TokenStream) -> Self {
+    fn new(ctx: &Context<'a>, type_ref: TokenStream, type_def: TokenStream, size: usize) -> Self {
         Self {
             ctx: ctx.clone(),
             type_ref,
             type_def,
+            size,
         }
     }
 }
@@ -563,7 +571,7 @@ impl<'a> Generator<'a> {
                     gid,
                     arg_refs: String::new(),
                 });
-                Ok(self.generate_type(Default::default(), expr))
+                Ok(self.generate_type(Default::default(), expr).0)
             }
             Some(expr) => Err(Error::Assert(format!(
                 "Unexpected top-level type: {expr:?}"
@@ -584,12 +592,13 @@ impl<'a> Generator<'a> {
         ctx: &Context<'a>,
         type_ref: TokenStream,
         type_def: TokenStream,
-    ) -> TokenStream {
+        size: usize,
+    ) -> (TokenStream, usize) {
         let type_id = TypeId {
             gid: ctx.gid(),
             arg_refs: ctx.arg_refs().to_string(),
         };
-        let type_desc = GeneratedType::new(ctx, type_ref.clone(), type_def);
+        let type_desc = GeneratedType::new(ctx, type_ref.clone(), type_def, size);
         if let Some(prev) = self.name_mapping.insert(type_id, type_desc) {
             gen_error!(
                 "duplicate type registered for {gid} as {type_ref}, already registered as {prev}",
@@ -597,14 +606,18 @@ impl<'a> Generator<'a> {
                 gid = ctx.gid()
             );
         }
-        type_ref
+        (type_ref, size)
     }
 
-    fn register_skipped_type(&self, ctx: &Context<'a>) -> TokenStream {
-        ctx.ident()
+    fn register_skipped_type(&self, ctx: &Context<'a>) -> (TokenStream, usize) {
+        (ctx.ident(), 1)
     }
 
-    pub fn generate_type(&mut self, ctx: Context<'a>, expr: &'a Expression) -> TokenStream {
+    pub fn generate_type(
+        &mut self,
+        ctx: Context<'a>,
+        expr: &'a Expression,
+    ) -> (TokenStream, usize) {
         match expr {
             Expression::Annotate(_, _) => todo!(),
             Expression::Base(uuid, args) => self.base_type(ctx, uuid, args),
@@ -618,19 +631,24 @@ impl<'a> Generator<'a> {
         }
     }
 
-    fn base_type(&mut self, ctx: Context<'a>, uuid: &str, args: &'a [Expression]) -> TokenStream {
+    fn base_type(
+        &mut self,
+        ctx: Context<'a>,
+        uuid: &str,
+        args: &'a [Expression],
+    ) -> (TokenStream, usize) {
         match (self.config.base_types.get(uuid).cloned(), args) {
             (None, _) => Error::UnknownBaseType(uuid.into()).into(),
-            (Some(BaseTypeMapping::Map(mapped)), []) => quote! { #mapped },
+            (Some(BaseTypeMapping::Map(mapped)), []) => (quote! { #mapped }, 1),
             (Some(BaseTypeMapping::Map(_)), _) => {
-                return Error::BaseTypeMismatchTypeParametersLenght(uuid, 0, args.len()).into()
+                Error::BaseTypeMismatchTypeParametersLenght(uuid, 0, args.len()).into()
             }
             (Some(BaseTypeMapping::MapWithArg(mapped)), [arg]) => {
-                let arg = self.generate_type(ctx.derive("Arg"), arg);
-                quote! { #mapped < #arg > }
+                let (arg, _) = self.generate_type(ctx.derive("Arg"), arg);
+                (quote! { #mapped < #arg > }, 1)
             }
             (Some(BaseTypeMapping::MapWithArg(_)), args) => {
-                return Error::BaseTypeMismatchTypeParametersLenght(uuid, 0, args.len()).into()
+                Error::BaseTypeMismatchTypeParametersLenght(uuid, 0, args.len()).into()
             }
             (Some(BaseTypeMapping::Table(_rust_id)), [_arg]) => {
                 todo!()
@@ -664,13 +682,18 @@ impl<'a> Generator<'a> {
                 // };
                 // quote! { #rust_id<#key, #value> }
             }
-            (Some(BaseTypeMapping::Table(_)), _) => {
-                gen_error!("Unexpected number of aguments for the base type {uuid}")
-            }
+            (Some(BaseTypeMapping::Table(_)), _) => (
+                gen_error!("Unexpected number of aguments for the base type {uuid}"),
+                0,
+            ),
         }
     }
 
-    fn record(&mut self, ctx: Context<'a>, fields: &'a [(String, Expression)]) -> TokenStream {
+    fn record(
+        &mut self,
+        ctx: Context<'a>,
+        fields: &'a [(String, Expression)],
+    ) -> (TokenStream, usize) {
         let name = ctx.ident();
         let preamble = self.config.type_preamble.clone();
         let phantom_fields = self.get_unused_params(fields.iter().map(|(_, expr)| expr));
@@ -679,10 +702,13 @@ impl<'a> Generator<'a> {
             .enumerate()
             .map(|(i, vid)| self.phantom_field(i, vid))
             .collect::<Vec<_>>();
-        let fields = fields
+        let (fields, sizes): (Vec<_>, Vec<_>) = fields
             .iter()
             .map(|(field, expr)| self.field(&ctx, field, expr, true))
-            .chain(phantom_fields);
+            .unzip();
+
+        let size = sizes.iter().sum();
+        let fields = fields.into_iter().chain(phantom_fields);
 
         let type_def = quote! {
             #preamble
@@ -690,7 +716,7 @@ impl<'a> Generator<'a> {
                 #(#fields,)*
             }
         };
-        self.register_type(&ctx, ctx.ident(), type_def)
+        self.register_type(&ctx, ctx.ident(), type_def, size)
     }
 
     fn get_unused_params<I: Clone + IntoIterator<Item = &'a Expression>>(
@@ -732,13 +758,16 @@ impl<'a> Generator<'a> {
         field: &str,
         expr: &'a Expression,
         make_public: bool,
-    ) -> TokenStream {
+    ) -> (TokenStream, usize) {
         let field_name = Self::ident(field);
-        let field_type = self.generate_type(ctx.derive(field), expr);
+        let (field_type, size) = self.generate_type(ctx.derive(field), expr);
         let p = if make_public { quote!(pub) } else { quote!() };
-        quote! {
-            #p #field_name: #field_type
-        }
+        (
+            quote! {
+                #p #field_name: #field_type
+            },
+            size,
+        )
     }
 
     fn phantom_field(&self, _i: usize, _vid: &Vid) -> TokenStream {
@@ -751,12 +780,53 @@ impl<'a> Generator<'a> {
         // }
     }
 
-    fn variant(&mut self, ctx: Context<'a>, alts: &'a [(String, Vec<Expression>)]) -> TokenStream {
+    fn should_box_alt(&self, size: usize, min_size: usize) -> bool {
+        if min_size == 0 {
+            size > 1
+        } else {
+            size > min_size * 3
+        }
+    }
+
+    fn variant(
+        &mut self,
+        ctx: Context<'a>,
+        alts: &'a [(String, Vec<Expression>)],
+    ) -> (TokenStream, usize) {
         let name = ctx.ident();
         let preamble = self.config.type_preamble.clone();
-        let alts = alts
+        let (alt_types, sizes): (Vec<_>, Vec<_>) = alts
             .iter()
-            .map(|(alt, exprs)| self.generate_alternative(&ctx, alt, exprs));
+            .map(|(alt, exprs)| {
+                let ctx = ctx.derive(alt);
+                if exprs.is_empty() {
+                    ((alt, Vec::new(), false), 1)
+                } else if let Some((Expression::Record(fields), [])) = exprs.split_first() {
+                    let (fields, sizes): (Vec<_>, Vec<_>) = fields
+                        .iter()
+                        .map(|(name, expr)| self.field(&ctx, name, expr, false))
+                        .unzip();
+                    ((alt, fields, true), sizes.into_iter().sum())
+                } else {
+                    let it = exprs.iter().enumerate();
+                    let (items, sizes): (Vec<_>, Vec<_>) = if exprs.len() == 1 {
+                        it.map(|(_, expr)| self.generate_type(ctx.clone(), expr))
+                            .unzip()
+                    } else {
+                        it.map(|(i, expr)| self.generate_type(ctx.derive(&i.to_string()), expr))
+                            .unzip()
+                    };
+                    ((alt, items, false), sizes.into_iter().sum())
+                }
+            })
+            .unzip();
+        let min_size = sizes.iter().min().cloned().unwrap_or(1);
+        let (alts, sizes): (Vec<_>, Vec<_>) = iter::zip(alt_types, sizes)
+            .map(|((alt, items, is_rec), size)| {
+                self.alternative(alt, &items, is_rec, size, min_size)
+            })
+            .unzip();
+        let max_size = sizes.into_iter().max().unwrap_or(1);
         let type_def = quote! {
             #preamble
             pub enum #name {
@@ -765,43 +835,60 @@ impl<'a> Generator<'a> {
                 )*
             }
         };
-        self.register_type(&ctx, name, type_def)
+        self.register_type(&ctx, name, type_def, max_size)
     }
 
-    fn generate_alternative(
+    fn alternative(
         &mut self,
-        ctx: &Context<'a>,
         alt: &str,
-        exprs: &'a [Expression],
-    ) -> TokenStream {
-        let ctx = ctx.derive(alt);
+        items: &[TokenStream],
+        is_rec: bool,
+        size: usize,
+        min_size: usize,
+    ) -> (TokenStream, usize) {
         let alt_name = Self::type_ident(alt);
-        if exprs.is_empty() {
-            quote!(#alt_name)
-        } else if let Some((Expression::Record(fields), [])) = exprs.split_first() {
-            let fields = fields
-                .iter()
-                .map(|(name, expr)| self.field(&ctx.derive(name), name, expr, false));
-            quote! {
-                #alt_name {
-                    #(#fields,)*
-                }
-            }
+        if items.is_empty() {
+            (quote!(#alt_name), 1)
+        } else if is_rec {
+            // TODO generate intermediate type for the record?
+            (
+                quote! {
+                    #alt_name {
+                        #(#items,)*
+                    }
+                },
+                size,
+            )
+        } else if self.should_box_alt(size, min_size) {
+            let items = if items.len() == 1 {
+                quote! { Box<#(#items),*> }
+            } else {
+                quote! { Box<(#(#items,)*)> }
+            };
+            (
+                quote! {
+                    #alt_name(#items)
+                },
+                1,
+            )
         } else {
-            let exprs = exprs
-                .iter()
-                .enumerate()
-                .map(|(i, expr)| self.generate_type(ctx.derive(&i.to_string()), expr));
-            quote!(#alt_name(#(#exprs,)*))
+            (
+                quote! {
+                    #alt_name(#(#items,)*)
+                },
+                size,
+            )
         }
     }
 
-    fn tuple(&mut self, ctx: Context<'a>, exprs: &'a [Expression]) -> TokenStream {
+    fn tuple(&mut self, ctx: Context<'a>, exprs: &'a [Expression]) -> (TokenStream, usize) {
         let preamble = self.config.type_preamble.clone();
-        let exprs = exprs
+        let (exprs, sizes): (Vec<_>, Vec<_>) = exprs
             .iter()
             .enumerate()
-            .map(|(i, expr)| self.generate_type(ctx.derive(&i.to_string()), expr));
+            .map(|(i, expr)| self.generate_type(ctx.derive(&i.to_string()), expr))
+            .unzip();
+        let size = sizes.into_iter().sum();
 
         if ctx.is_mandatory() {
             let name = ctx.ident();
@@ -810,12 +897,15 @@ impl<'a> Generator<'a> {
                 #preamble
                 pub struct #name (#(pub #exprs,)*);
             };
-            self.register_type(&ctx, name, type_def)
+            self.register_type(&ctx, name, type_def, size)
         } else {
             // just reference the tuple
-            quote! {
-                (#(#exprs,)*)
-            }
+            (
+                quote! {
+                    (#(#exprs,)*)
+                },
+                size,
+            )
         }
     }
 
@@ -824,11 +914,42 @@ impl<'a> Generator<'a> {
         ctx: Context<'a>,
         _loc: &Location,
         constrs: &'a [PolyConstr],
-    ) -> TokenStream {
+    ) -> (TokenStream, usize) {
         let name = ctx.ident();
         let preamble = self.config.type_preamble.clone();
         let poly_preamble = self.config.poly_var_preamble.clone();
-        let constrs = constrs.iter().map(|constr| self.poly_constr(&ctx, constr));
+        let (constrs, sizes): (Vec<_>, Vec<_>) = constrs
+            .iter()
+            .map(|constr| self.poly_constr(&ctx, constr))
+            .unzip();
+        let min_size = sizes.iter().min().cloned().unwrap_or_default();
+        let (constrs, sizes): (Vec<_>, Vec<_>) = iter::zip(constrs, sizes)
+            .map(|((name, constr), size)| {
+                let name = Self::type_ident(name);
+                if constr.is_none() {
+                    (
+                        quote! {
+                            #name
+                        },
+                        0,
+                    )
+                } else if self.should_box_alt(size, min_size) {
+                    (
+                        quote! {
+                            #name(Box<#constr>)
+                        },
+                        1,
+                    )
+                } else {
+                    (
+                        quote! {
+                            #name(#constr)
+                        },
+                        size,
+                    )
+                }
+            })
+            .unzip();
         let type_def = quote! {
             #preamble
             #poly_preamble
@@ -836,32 +957,43 @@ impl<'a> Generator<'a> {
                 #(#constrs,)*
             }
         };
-        self.register_type(&ctx, name, type_def)
+        self.register_type(
+            &ctx,
+            name,
+            type_def,
+            sizes.into_iter().max().unwrap_or_default(),
+        )
     }
 
-    fn poly_constr(&mut self, ctx: &Context<'a>, constr: &'a PolyConstr) -> TokenStream {
+    fn poly_constr(
+        &mut self,
+        ctx: &Context<'a>,
+        constr: &'a PolyConstr,
+    ) -> ((&'a str, Option<TokenStream>), usize) {
         match constr {
             PolyConstr::Constr((name, opt_expr)) => {
-                let ctx = ctx.derive(name);
-                let alt_name = Self::type_ident(name);
                 if let Some(expr) = opt_expr {
-                    let expr = self.generate_type(ctx, expr);
-                    quote!(#alt_name(#expr))
+                    let (expr, size) = self.generate_type(ctx.derive(name), expr);
+                    ((name, Some(expr)), size)
                 } else {
-                    quote!(#alt_name)
+                    ((name, None), 0)
                 }
             }
-            PolyConstr::Inherit(_) => {
-                Error::Assert(format!("poly constr inherit is not implemented")).into()
-            }
+            PolyConstr::Inherit(_) => (
+                (
+                    "",
+                    Some(Error::Assert(format!("poly constr inherit is not implemented")).into()),
+                ),
+                0,
+            ),
         }
     }
 
-    fn var(&self, _loc: &str, vid: &str) -> TokenStream {
+    fn var(&self, _loc: &str, vid: &str) -> (TokenStream, usize) {
         some_or_gen_error!(self.venv.get(vid).cloned(), Error::UnresolvedTypeVar(vid))
     }
 
-    fn rec_app(&mut self, tid: &str, args: &[Expression]) -> TokenStream {
+    fn rec_app(&mut self, tid: &str, args: &[Expression]) -> (TokenStream, usize) {
         let (ctx, vids) = some_or_gen_error!(self.tenv.get(tid), Error::UnresolvedRecType(tid));
         if vids.len() != args.len() {
             return Error::UnmatchedRecAppArgs(tid).into();
@@ -870,15 +1002,18 @@ impl<'a> Generator<'a> {
             .any(|(vid, arg)| matches!(arg, Expression::Var((_, v)) if v == vid))
         {
             let name = ctx.ident();
-            quote! {
-                Box<#name>
-            }
+            (
+                quote! {
+                    Box<#name>
+                },
+                1,
+            )
         } else {
             Error::UnmatchedRecAppArgs(tid).into()
         }
     }
 
-    fn stringify_arg_refs(arg_refs: &[TokenStream]) -> String {
+    fn stringify_arg_refs<'z, I: 'z + Iterator<Item = &'z TokenStream>>(arg_refs: I) -> String {
         quote! {
             #(#arg_refs),*
         }
@@ -891,7 +1026,7 @@ impl<'a> Generator<'a> {
         group: &'a Group,
         tid: &'a str,
         args: &'a [Expression],
-    ) -> TokenStream {
+    ) -> (TokenStream, usize) {
         let Group { gid, loc, members } = group;
 
         let (_tid, (vids, expr)) = some_or_gen_error!(members.first(), Error::EmptyGroup(&gid));
@@ -901,44 +1036,43 @@ impl<'a> Generator<'a> {
         }
 
         if let Some(_ver_expr) = self.versioned_type(expr) {
-            let type_ref = self.generate_type(ctx, expr);
+            let (type_ref, size) = self.generate_type(ctx, expr);
             // TODO
-            quote! {
-                Versioned<#type_ref, 1>
-            }
+            (
+                quote! {
+                    Versioned<#type_ref, 1>
+                },
+                size,
+            )
         } else {
             let arg_refs = self.substitute_args(&ctx, vids, args);
+            let arg_refs_str = Self::stringify_arg_refs(arg_refs.iter().map(|(ar, _)| ar));
             let type_id = TypeId {
                 gid,
-                arg_refs: Self::stringify_arg_refs(&arg_refs),
+                arg_refs: arg_refs_str.clone(),
             };
             if let Some(gen_type) = self.name_mapping.get(&type_id) {
-                return gen_type.type_ref.clone();
+                return (gen_type.type_ref.clone(), gen_type.size);
             }
 
             let venv = self.new_venv(vids, &arg_refs);
             let tenv = self.new_tenv(tid, &ctx, vids);
 
-            let ctx = ctx.with_name_or_inherited(
-                self.global_name(gid),
-                gid,
-                Self::stringify_arg_refs(&arg_refs),
-                loc,
-            );
+            let ctx = ctx.with_name_or_inherited(self.global_name(gid), gid, arg_refs_str, loc);
 
             // check if to skip the type
             if self.config.skip.contains(&ctx.ident().to_string()) {
                 return self.register_skipped_type(&ctx);
             }
 
-            let type_ref = self.generate_type(ctx.clone(), expr);
+            let (type_ref, size) = self.generate_type(ctx.clone(), expr);
 
             self.tenv = tenv;
             self.venv = venv;
 
             if ctx.mandatory_name_matches(&type_ref) {
                 // underlying type has the same name as this one
-                return type_ref;
+                return (type_ref, size);
             }
 
             let name = ctx.ident();
@@ -953,7 +1087,7 @@ impl<'a> Generator<'a> {
                     pub struct #name(pub #type_ref);
                 }
             };
-            self.register_type(&ctx, name, type_def)
+            self.register_type(&ctx, name, type_def, size)
         }
     }
 
@@ -1125,7 +1259,7 @@ impl<'a> Generator<'a> {
         None
     }
 
-    fn new_venv(&mut self, vids: &'a [String], arg_refs: &[TokenStream]) -> Venv<'a> {
+    fn new_venv(&mut self, vids: &'a [String], arg_refs: &[(TokenStream, usize)]) -> Venv<'a> {
         let mut venv = self.venv.clone();
         venv.extend(
             iter::zip(vids, arg_refs).map(|(vid, arg_ref)| (vid.as_str(), arg_ref.clone())),
@@ -1181,7 +1315,7 @@ impl<'a> Generator<'a> {
         ctx: &Context<'a>,
         vids: &'a [Vid],
         args: &'a [Expression],
-    ) -> Vec<TokenStream> {
+    ) -> Vec<(TokenStream, usize)> {
         iter::zip(vids, args)
             .map(|(vid, expr)| self.generate_type(ctx.derive(vid), expr))
             .collect()
@@ -1242,6 +1376,12 @@ macro_rules! base {
     ($uuid:expr, $arg:expr) => {
         Expression::Base($uuid.into(), vec![$arg.clone()])
     };
+    ($uuid:ident) => {
+        Expression::Base(stringify!($uuid).into(), Vec::new())
+    };
+    ($uuid:ident, $arg:expr) => {
+        Expression::Base(stringify!($uuid).into(), vec![$arg.clone()])
+    };
 }
 
 #[macro_export]
@@ -1285,6 +1425,28 @@ macro_rules! record {
 macro_rules! tuple {
     ($($item:expr),* $(,)?) => {
         crate::shape::Expression::Tuple(vec![$($item.clone()),*])
+    };
+}
+
+#[macro_export]
+macro_rules! variant {
+    ($(
+        $alt:ident $(($($item:expr),+ $(,)?))?
+    ),* $(,)?) => {
+        Expression::Variant(vec![$(
+            (String::from(stringify!($alt)), vec![$($($item.clone()),+)?])
+        ),*])
+    };
+    ($(
+        $alt:ident { $($field:ident : $item:expr),* $(,)? }
+    ),* $(,)?) => {
+        Expression::Variant(vec![$(
+            (String::from(stringify!($alt)), vec![
+                Expression::Record(vec![
+                    $( (stringify!($field).into(), $item.clone()) ),*
+                ])
+            ])
+        ),*])
     };
 }
 

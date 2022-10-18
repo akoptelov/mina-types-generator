@@ -113,7 +113,7 @@ mod type_ref_simple {
         let expr: Expression = expr.parse().unwrap();
         let binding: [(String, Expression); 0] = [];
         let xref = XRef::new(&binding).unwrap();
-        let ts = Generator::new(&xref, ConfigBuilder::default().build().unwrap())
+        let (ts, _) = Generator::new(&xref, ConfigBuilder::default().build().unwrap())
             .generate_type(Default::default(), &expr);
         ts.to_string()
     }
@@ -150,6 +150,7 @@ mod type_ref_complex {
         let xref = XRef::new(bindings).unwrap();
         Generator::new(&xref, ConfigBuilder::default().build().unwrap())
             .generate_type(Default::default(), expr)
+            .0
             .to_string()
     }
 
@@ -342,6 +343,130 @@ pub struct Item(pub bool);
 pub struct Item(pub bool);
 "#;
         assert_eq!(rs, rust);
+    }
+
+    #[test]
+    fn variant() {
+        let variant = top_app!(1, variant!(foo, bar));
+        let rs = gen("variant", &bindings!(variant));
+        let rust = r#"pub enum Variant {
+    Foo,
+    Bar,
+}
+"#;
+        assert_eq!(&rs, rust);
+
+        let variant = top_app!(
+            1,
+            variant!(foo(base!("bool")), bar(base!("list", base!("bool"))))
+        );
+        let rs = gen("variant", &bindings!(variant));
+        let rust = r#"pub enum Variant {
+    Foo(bool),
+    Bar(Vec<bool>),
+}
+"#;
+        assert_eq!(&rs, rust);
+
+        let variant = top_app!(
+            1,
+            variant!(
+                foo { b: base!("bool") },
+                bar {
+                    l: base!("list", base!("bool"))
+                }
+            )
+        );
+        let rs = gen("variant", &bindings!(variant));
+        let rust = r#"pub enum Variant {
+    Foo { b: bool },
+    Bar { l: Vec<bool> },
+}
+"#;
+        assert_eq!(&rs, rust);
+    }
+}
+
+mod size {
+
+    use crate::gen::{ConfigBuilder, Generator};
+    use crate::shape::*;
+    use crate::xref::XRef;
+
+    fn size(expr: &Expression) -> usize {
+        let bindings: &[(String, Expression)] = &[];
+        let xref = XRef::new(bindings).unwrap();
+        Generator::new(&xref, ConfigBuilder::default().build().unwrap())
+            .generate_type(Default::default(), expr)
+            .1
+    }
+
+    #[test]
+    fn base_type() {
+        for expr in [base!("bool"), base!("list", base!("bool"))] {
+            let s = size(&expr);
+            assert_eq!(s, 1);
+        }
+    }
+
+    #[test]
+    fn tuple() {
+        let tuple = tuple!(base!("bool"), base!("bool"));
+        assert_eq!(size(&tuple), 2);
+        let tuple = tuple!(tuple, tuple);
+        assert_eq!(size(&tuple), 4);
+    }
+
+    #[test]
+    fn record() {
+        assert_eq!(size(&top_app!(1, record!(f: base!("bool")))), 1);
+        assert_eq!(
+            size(&top_app!(1, record!(f1: base!("bool"), f2: base!("bool")))),
+            2
+        );
+    }
+
+    #[test]
+    fn variant() {
+        let variant = top_app!(1, variant!(foo, bar));
+        assert_eq!(size(&variant), 1);
+
+        let variant = top_app!(
+            1,
+            variant!(foo(base!("bool")), bar(base!("list", base!("bool"))))
+        );
+        assert_eq!(size(&variant), 1);
+
+        let variant = top_app!(
+            1,
+            variant!(
+                foo { b: base!("bool") },
+                bar {
+                    l: base!("list", base!("bool"))
+                }
+            )
+        );
+        assert_eq!(size(&variant), 1);
+        let variant = top_app!(
+            1,
+            variant!(
+                foo {},
+                bar {
+                    l: base!("list", base!("bool")),
+                    b: base!("bool"),
+                }
+            )
+        );
+        assert_eq!(size(&variant), 2);
+    }
+
+    #[test]
+    fn top_app() {
+        assert_eq!(size(&top_app!(1, base!("bool"))), 1);
+        assert_eq!(
+            size(&top_app!(1, record!(f: var!(a)), a => base!("bool"))),
+            1
+        );
     }
 }
 
