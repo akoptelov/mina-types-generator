@@ -1,6 +1,6 @@
 use std::{
     cmp::Ordering,
-    fs::{File, self},
+    fs::{self, File},
     io::{BufRead, BufReader, Read, Write},
     path::{Path, PathBuf},
 };
@@ -16,7 +16,7 @@ use clap::{ArgEnum, Args, Parser, Subcommand};
 use rsexp::SexpOf;
 use rust_format::{Formatter, RustFmt};
 
-#[derive(Parser)]
+#[derive(Parser, Debug)]
 struct Cli {
     #[clap(value_parser)]
     file: String,
@@ -28,19 +28,22 @@ struct Cli {
     command: Commands,
 }
 
-#[derive(Args)]
+#[derive(Args, Debug)]
 struct Gen {
     #[clap(short, long)]
-    _type: Vec<String>,
-    #[clap(short, long)]
-    all: bool,
-    #[clap(short, long)]
     config: Option<PathBuf>,
+
     #[clap(short, long)]
     out: Option<PathBuf>,
+
+    #[clap(short, long)]
+    all: bool,
+
+    #[clap(value_parser)]
+    types: Vec<String>,
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommand, Debug)]
 enum Commands {
     Filter {
         #[clap(short, long)]
@@ -58,7 +61,7 @@ enum Commands {
     Dump(Dump),
 }
 
-#[derive(Args)]
+#[derive(Args, Debug)]
 struct Dump {
     #[clap(short, long)]
     _type: Vec<String>,
@@ -121,7 +124,7 @@ impl Dump {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, ArgEnum)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, ArgEnum, Debug)]
 enum ExprKind {
     Record,
     Variant,
@@ -238,8 +241,8 @@ fn doc(shapes: Vec<Type>, _types: Vec<String>, all: bool) -> Result<()> {
 
 impl Gen {
     fn run(self, shapes: Vec<Type>) -> Result<()> {
-        if self._type.is_empty() != self.all {
-            bail!("should be either --type or --all");
+        if self.types.is_empty() != self.all {
+            bail!("should be either --all or [TYPES]");
         }
 
         let xref = XRef::new(&shapes)?;
@@ -261,7 +264,7 @@ impl Gen {
         let ts = if self.all {
             gen.generate_types(xref.names())
         } else {
-            gen.generate_types(&self._type)
+            gen.generate_types(&self.types)
         };
         let config = rust_format::Config::new_str()
             .post_proc(rust_format::PostProcess::ReplaceMarkersAndDocBlocks);
