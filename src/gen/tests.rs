@@ -2,27 +2,12 @@
 
 // use proc_macro2::{TokenStream, TokenTree};
 
-
 mod sanitize {
-    use crate::gen::Generator;
-
-    #[test]
-    #[should_panic]
-    fn incorrect_field_ident() {
-        Generator::field_ident("incorrect field");
-    }
-
-    #[test]
-    #[should_panic]
-    fn incorrect_type_ident() {
-        Generator::type_ident("incorrect type");
-    }
+    use crate::gen::{Context, Generator, NameMapper};
 
     #[test]
     fn field_idents() {
-        for (ocaml, rust) in [
-            ("some_field", "some_field"),
-        ] {
+        for (ocaml, rust) in [("some_field", "some_field")] {
             let ident = Generator::field_ident(ocaml);
             assert_eq!(&ident.to_string(), rust);
         }
@@ -35,13 +20,40 @@ mod sanitize {
             ("some_type", "SomeType"),
             ("SomeType", "SomeType"),
         ] {
-            let ident = Generator::type_ident(ocaml);
-            assert_eq!(&ident.to_string(), rust);
+            let ident = Generator::name_for_type(ocaml);
+            assert_eq!(&ident, rust);
+        }
+    }
+
+    /// Possibly qualified type names
+    #[test]
+    fn type_names() {
+        let mapper = NameMapper::new([]);
+        let types = [
+            ("Module.Type.Latest", "ModuleTypeLatest"),
+            ("Module.Type.MakeStr.Latest", "ModuleTypeMakeStrLatest"),
+            ("Module.SomeType.Latest", "ModuleSomeTypeLatest"),
+        ];
+        for (ocaml, rust) in types {
+            let rust_gen = Context::sanitize_name(ocaml, &mapper);
+            assert_eq!(&rust_gen, rust);
+        }
+
+        let mapper = NameMapper::new([
+            ("MakeStr".into(), String::new()),
+            ("SomeType".into(), "AnotherType".into()),
+        ]);
+        let types = [
+            ("Module.Type.Latest", "ModuleTypeLatest"),
+            ("Module.Type.MakeStr.Latest", "ModuleTypeLatest"),
+            ("Module.SomeType.Latest", "ModuleAnotherTypeLatest"),
+        ];
+        for (ocaml, rust) in types {
+            let rust_gen = Context::sanitize_name(ocaml, &mapper);
+            assert_eq!(&rust_gen, rust);
         }
     }
 }
-
-
 
 macro_rules! bindings {
     ($($tt:tt)*) => {
@@ -125,7 +137,7 @@ macro_rules! bindings_internal {
 
 mod type_ref_simple {
     use crate::{
-        gen::{ConfigBuilder, Generator},
+        gen::{ConfigBuilder, Context, Generator},
         shape::Expression,
         xref::XRef,
     };
@@ -135,7 +147,7 @@ mod type_ref_simple {
         let binding: [(String, Expression); 0] = [];
         let xref = XRef::new(&binding).unwrap();
         let (ts, _) = Generator::new(&xref, ConfigBuilder::default().build().unwrap())
-            .generate_type(Default::default(), &expr);
+            .generate_type(Context::default(), &expr);
         ts.to_string()
     }
 

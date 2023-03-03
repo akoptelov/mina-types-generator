@@ -147,6 +147,11 @@ pub struct Config {
     #[builder(default)]
     #[serde(default)]
     skip: HashSet<String>,
+
+    /// Name components mapping.
+    #[builder(default)]
+    #[serde(default)]
+    names_mapping: BTreeMap<String, String>,
 }
 
 mod token_stream {
@@ -245,7 +250,7 @@ struct TypeId<'a> {
     arg_refs: String,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct GeneratedType<'a> {
     ctx: Context<'a>,
     type_ref: TokenStream,
@@ -281,6 +286,9 @@ pub struct Generator<'a> {
     venv: Venv<'a>,
     /// Types substitution (for recursive types).
     tenv: Tenv<'a>,
+
+    /// Name conversion rules.
+    name_conv: NameMapper,
 }
 
 #[derive(Clone, Debug)]
@@ -300,10 +308,26 @@ pub struct Context<'a> {
 impl<'a> Default for Context<'a> {
     fn default() -> Self {
         Self {
-            name: String::from("<empty name>"),
+            name: String::from("empty"),
             is_mandatory: Default::default(),
             top_apps: Default::default(),
         }
+    }
+}
+
+#[derive(Debug)]
+struct NameMapper {
+    mapping: BTreeMap<String, String>,
+}
+
+impl NameMapper {
+    fn new(mapping: impl Into<BTreeMap<String, String>>) -> Self {
+        NameMapper {
+            mapping: mapping.into(),
+        }
+    }
+    fn map<'a>(&'a self, name: &'a str) -> &'a str {
+        self.mapping.get(name).map_or(name, String::as_str)
     }
 }
 
@@ -356,39 +380,26 @@ impl<'a> Context<'a> {
 
     fn derive(&self, suffix: &str) -> Self {
         Self {
-            name: format!("{name}#{suffix}", name = self.name),
+            name: format!("{name}.{suffix}", name = self.name),
             is_mandatory: false,
             top_apps: Vec::new(),
         }
     }
 
-    fn sanitize_name(name: &str) -> String {
-        let mut san_name = String::new();
-        if matches!(name.chars().next(), Some(first) if first.is_numeric()) {
-            san_name.push('_');
-        }
-        let mut to_upper = true;
-        for ch in name.chars() {
-            if ch.is_alphanumeric() {
-                san_name.push(if to_upper {
-                    ch.to_ascii_uppercase()
-                } else {
-                    ch
-                });
-                to_upper = false;
-            } else {
-                to_upper = true;
-            }
-        }
-        san_name
+    fn sanitize_name(name: &str, mapper: &NameMapper) -> String {
+        name.split('.')
+            .map(|comp| mapper.map(comp))
+            .map(Generator::name_for_type)
+            .collect::<Vec<_>>()
+            .join("")
     }
 
-    fn ident(&self) -> TokenStream {
-        format_ident!("{name}", name = Self::sanitize_name(&self.name)).to_token_stream()
+    fn ident(&self, mapper: &NameMapper) -> TokenStream {
+        format_ident!("{name}", name = Self::sanitize_name(&self.name, mapper)).to_token_stream()
     }
 
-    fn mandatory_name_matches(&self, type_ref: &TokenStream) -> bool {
-        !self.is_mandatory || self.ident().to_string() == type_ref.to_string()
+    fn mandatory_name_matches(&self, type_ref: &TokenStream, mapper: &NameMapper) -> bool {
+        !self.is_mandatory || self.ident(mapper).to_string() == type_ref.to_string()
     }
 }
 
@@ -471,9 +482,10 @@ impl TryFrom<BaseTypeMappingToml> for BaseTypeMapping {
 }
 
 impl<'a> Generator<'a> {
-    pub fn new(xref: &'a XRef<'a>, config: Config) -> Self {
+    pub fn new(xref: &'a XRef<'a>, mut config: Config) -> Self {
         Self {
             xref,
+            name_conv: NameMapper::new(mem::take(&mut config.names_mapping)),
             config,
             name_mapping: BTreeMap::new(),
             requested_types: Vec::new(),
@@ -571,7 +583,7 @@ impl<'a> Generator<'a> {
                     gid,
                     arg_refs: String::new(),
                 });
-                Ok(self.generate_type(Default::default(), expr).0)
+                Ok(self.generate_type(Context::default(), expr).0)
             }
             Some(expr) => Err(Error::Assert(format!(
                 "Unexpected top-level type: {expr:?}"
@@ -582,7 +594,7 @@ impl<'a> Generator<'a> {
 
     #[allow(dead_code)]
     fn generate_type_defs(&mut self, expr: &'a Expression) -> TokenStream {
-        self.generate_type(Default::default(), expr);
+        self.generate_type(Context::default(), expr);
         self.generated_to_token_stream()
     }
 
@@ -610,7 +622,7 @@ impl<'a> Generator<'a> {
     }
 
     fn register_skipped_type(&self, ctx: &Context<'a>) -> (TokenStream, usize) {
-        (ctx.ident(), 1)
+        (ctx.ident(&self.name_conv), 1)
     }
 
     pub fn generate_type(
@@ -694,7 +706,7 @@ impl<'a> Generator<'a> {
         ctx: Context<'a>,
         fields: &'a [(String, Expression)],
     ) -> (TokenStream, usize) {
-        let name = ctx.ident();
+        let name = ctx.ident(&self.name_conv);
         let preamble = self.config.type_preamble.clone();
         let phantom_fields = self.get_unused_params(fields.iter().map(|(_, expr)| expr));
         let phantom_fields = phantom_fields
@@ -716,7 +728,7 @@ impl<'a> Generator<'a> {
                 #(#fields,)*
             }
         };
-        self.register_type(&ctx, ctx.ident(), type_def, size)
+        self.register_type(&ctx, ctx.ident(&self.name_conv), type_def, size)
     }
 
     fn get_unused_params<I: Clone + IntoIterator<Item = &'a Expression>>(
@@ -793,7 +805,7 @@ impl<'a> Generator<'a> {
         ctx: Context<'a>,
         alts: &'a [(String, Vec<Expression>)],
     ) -> (TokenStream, usize) {
-        let name = ctx.ident();
+        let name = ctx.ident(&self.name_conv);
         let preamble = self.config.type_preamble.clone();
         let (alt_types, sizes): (Vec<_>, Vec<_>) = alts
             .iter()
@@ -891,7 +903,7 @@ impl<'a> Generator<'a> {
         let size = sizes.into_iter().sum();
 
         if ctx.is_mandatory() {
-            let name = ctx.ident();
+            let name = ctx.ident(&self.name_conv);
             // we should generate the type corresponding to this name
             let type_def = quote! {
                 #preamble
@@ -915,7 +927,7 @@ impl<'a> Generator<'a> {
         _loc: &Location,
         constrs: &'a [PolyConstr],
     ) -> (TokenStream, usize) {
-        let name = ctx.ident();
+        let name = ctx.ident(&self.name_conv);
         let preamble = self.config.type_preamble.clone();
         let poly_preamble = self.config.poly_var_preamble.clone();
         let (constrs, sizes): (Vec<_>, Vec<_>) = constrs
@@ -1001,7 +1013,7 @@ impl<'a> Generator<'a> {
         if iter::zip(*vids, args)
             .any(|(vid, arg)| matches!(arg, Expression::Var((_, v)) if v == vid))
         {
-            let name = ctx.ident();
+            let name = ctx.ident(&self.name_conv);
             (
                 quote! {
                     Box<#name>
@@ -1061,7 +1073,11 @@ impl<'a> Generator<'a> {
             let ctx = ctx.with_name_or_inherited(self.global_name(gid), gid, arg_refs_str, loc);
 
             // check if to skip the type
-            if self.config.skip.contains(&ctx.ident().to_string()) {
+            if self
+                .config
+                .skip
+                .contains(&ctx.ident(&self.name_conv).to_string())
+            {
                 return self.register_skipped_type(&ctx);
             }
 
@@ -1070,12 +1086,12 @@ impl<'a> Generator<'a> {
             self.tenv = tenv;
             self.venv = venv;
 
-            if ctx.mandatory_name_matches(&type_ref) {
+            if ctx.mandatory_name_matches(&type_ref, &self.name_conv) {
                 // underlying type has the same name as this one
                 return (type_ref, size);
             }
 
-            let name = ctx.ident();
+            let name = ctx.ident(&self.name_conv);
             let type_def = if self.config.use_type_alias {
                 quote! {
                     pub type #name = #type_ref;
@@ -1135,13 +1151,10 @@ impl<'a> Generator<'a> {
         format_ident!("{name}").to_token_stream()
     }
 
-    /// Sanitizes OCaml ident as a Rust type name.
-    fn type_ident(name: &str) -> TokenStream {
-        let ident = name
-            .chars()
+    fn name_for_type(name: &str) -> String {
+        name.chars()
             .scan(true, |upcase, ch| {
                 if !ch.is_alphanumeric() {
-                    debug_assert_eq!(ch, '_');
                     *upcase = true;
                     Some(None)
                 } else if *upcase {
@@ -1152,7 +1165,12 @@ impl<'a> Generator<'a> {
                 }
             })
             .filter_map(|it| it)
-            .collect::<String>();
+            .collect::<String>()
+    }
+
+    /// Sanitizes OCaml ident as a Rust type name.
+    fn type_ident(name: &str) -> TokenStream {
+        let ident = Generator::name_for_type(name);
         format_ident!("{ident}").to_token_stream()
     }
 

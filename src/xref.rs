@@ -72,10 +72,11 @@ impl<'a> XRef<'a> {
                 gid_name.insert(group.gid, ty.name());
                 gid_map.insert(group.gid, (ty.shape(), Some(ty.name())));
             } else {
-                return Err(Error::IncorrectExpression(format!(
-                    "Wrong type for {name}",
-                    name = ty.name()
-                )));
+                name_map.insert(ty.name(), ty.shape());
+                // return Err(Error::IncorrectExpression(format!(
+                //     "Wrong type for {name}",
+                //     name = ty.name()
+                // )));
             }
         }
 
