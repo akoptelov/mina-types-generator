@@ -759,7 +759,7 @@ impl<'a> Generator<'a> {
         expr: &'a Expression,
         make_public: bool,
     ) -> (TokenStream, usize) {
-        let field_name = Self::ident(field);
+        let field_name = Self::field_ident(field);
         let (field_type, size) = self.generate_type(ctx.derive(field), expr);
         let p = if make_public { quote!(pub) } else { quote!() };
         (
@@ -1091,27 +1091,11 @@ impl<'a> Generator<'a> {
         }
     }
 
-    #[allow(dead_code)]
-    fn get_name_and_version(name: &str) -> std::result::Result<(String, syn::Lit), Error> {
-        use proc_macro2::Span;
-        use syn::{Lit, LitInt};
-        if let Some(name) = name.strip_suffix(".t") {
-            if let Some((_, version)) = name.rsplit_once(".V") {
-                return Ok((
-                    Self::sanitize_name(name),
-                    Lit::Int(LitInt::new(version, Span::mixed_site())),
-                ));
-            }
-        }
-        return Err(Error::NoVersion(name.to_string()));
-    }
-
     fn global_name(&self, gid: &'a Gid) -> Option<&'a str> {
         self.xref
             .expr_for_gid(*gid)
             .and_then(|(_, name_opt)| name_opt)
     }
-
 
     fn versioned_type(&self, expr: &'a Expression) -> Option<&'a Expression> {
         if let Expression::Record(fields) = expr {
@@ -1146,33 +1130,30 @@ impl<'a> Generator<'a> {
         std::mem::replace(&mut self.tenv, tenv)
     }
 
-    fn sanitize_name(name: &str) -> String {
-        let mut san_name = String::new();
-        if matches!(name.chars().next(), Some(first) if first.is_numeric()) {
-            san_name.push('_');
-        }
-        let mut to_upper = true;
-        for ch in name.chars() {
-            if ch.is_alphanumeric() {
-                san_name.push(if to_upper {
-                    ch.to_ascii_uppercase()
-                } else {
-                    ch
-                });
-                to_upper = false;
-            } else {
-                to_upper = true;
-            }
-        }
-        san_name
-    }
-
-    fn ident(name: &str) -> TokenStream {
+    fn field_ident(name: &str) -> TokenStream {
+        debug_assert!(name.chars().all(|ch| ch == '_' || ch.is_alphanumeric()));
         format_ident!("{name}").to_token_stream()
     }
 
+    /// Sanitizes OCaml ident as a Rust type name.
     fn type_ident(name: &str) -> TokenStream {
-        format_ident!("{name}", name = Self::sanitize_name(name)).to_token_stream()
+        let ident = name
+            .chars()
+            .scan(true, |upcase, ch| {
+                if !ch.is_alphanumeric() {
+                    debug_assert_eq!(ch, '_');
+                    *upcase = true;
+                    Some(None)
+                } else if *upcase {
+                    *upcase = false;
+                    Some(Some(ch.to_ascii_uppercase()))
+                } else {
+                    Some(Some(ch))
+                }
+            })
+            .filter_map(|it| it)
+            .collect::<String>();
+        format_ident!("{ident}").to_token_stream()
     }
 
     // fn group_name(&self, gid: &Gid) -> Option<&str> {

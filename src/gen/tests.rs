@@ -2,6 +2,47 @@
 
 // use proc_macro2::{TokenStream, TokenTree};
 
+
+mod sanitize {
+    use crate::gen::Generator;
+
+    #[test]
+    #[should_panic]
+    fn incorrect_field_ident() {
+        Generator::field_ident("incorrect field");
+    }
+
+    #[test]
+    #[should_panic]
+    fn incorrect_type_ident() {
+        Generator::type_ident("incorrect type");
+    }
+
+    #[test]
+    fn field_idents() {
+        for (ocaml, rust) in [
+            ("some_field", "some_field"),
+        ] {
+            let ident = Generator::field_ident(ocaml);
+            assert_eq!(&ident.to_string(), rust);
+        }
+    }
+
+    #[test]
+    fn type_idents() {
+        for (ocaml, rust) in [
+            ("Some_type", "SomeType"),
+            ("some_type", "SomeType"),
+            ("SomeType", "SomeType"),
+        ] {
+            let ident = Generator::type_ident(ocaml);
+            assert_eq!(&ident.to_string(), rust);
+        }
+    }
+}
+
+
+
 macro_rules! bindings {
     ($($tt:tt)*) => {
         bindings_internal!(() $($tt)*)
@@ -80,26 +121,6 @@ macro_rules! bindings_internal {
     // ($($name:ident: $ty:expr),* $(,)?) => {
     //     vec![$( (stringify!($name), $ty.clone()) ),*]
     // };
-}
-
-mod names {
-    use quote::ToTokens;
-
-    #[test]
-    fn versioned_type_name() {
-        assert_eq!(
-            super::super::Generator::get_name_and_version("Mod.Stable.V1.t")
-                .map(|(n, v)| (n, v.to_token_stream().to_string()))
-                .unwrap(),
-            (String::from("ModStableV1"), "1".to_string())
-        );
-        assert!(matches!(
-            super::super::Generator::get_name_and_version("Mod.Stable.V1")
-                .map(|_| ())
-                .unwrap_err(),
-            super::super::Error::NoVersion(_)
-        ));
-    }
 }
 
 mod type_ref_simple {

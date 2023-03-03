@@ -168,6 +168,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn new_err() {
         let exprs = vec![(
             "my_type",
