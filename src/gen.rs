@@ -366,10 +366,8 @@ impl<'a> Context<'a> {
         &self.name
     }
 
-    fn gid(&self) -> &'a Gid {
-        self.top_apps
-            .first()
-            .map_or_else(|| panic!("no gid"), |ta| ta.gid)
+    fn gid(&self) -> Option<&'a Gid> {
+        self.top_apps.first().map(|ta| ta.gid)
     }
 
     fn arg_refs(&self) -> &str {
@@ -606,17 +604,18 @@ impl<'a> Generator<'a> {
         type_def: TokenStream,
         size: usize,
     ) -> (TokenStream, usize) {
-        let type_id = TypeId {
-            gid: ctx.gid(),
-            arg_refs: ctx.arg_refs().to_string(),
-        };
-        let type_desc = GeneratedType::new(ctx, type_ref.clone(), type_def, size);
-        if let Some(prev) = self.name_mapping.insert(type_id, type_desc) {
-            gen_error!(
-                "duplicate type registered for {gid} as {type_ref}, already registered as {prev}",
-                prev = prev.type_ref,
-                gid = ctx.gid()
-            );
+        if let Some(gid) = ctx.gid() {
+            let type_id = TypeId {
+                gid,
+                arg_refs: ctx.arg_refs().to_string(),
+            };
+            let type_desc = GeneratedType::new(ctx, type_ref.clone(), type_def, size);
+            if let Some(prev) = self.name_mapping.insert(type_id, type_desc) {
+                gen_error!(
+                    "duplicate type registered for {gid} as {type_ref}, already registered as {prev}",
+                    prev = prev.type_ref,
+                );
+            }
         }
         (type_ref, size)
     }
