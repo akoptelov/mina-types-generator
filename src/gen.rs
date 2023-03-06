@@ -4,7 +4,7 @@ use std::{
 };
 
 use derive_builder::Builder;
-use proc_macro2::TokenStream;
+use proc_macro2::{Literal, TokenStream};
 use quote::{format_ident, quote, ToTokens};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -147,6 +147,14 @@ pub struct Config {
     #[builder(default)]
     #[serde(default)]
     skip: HashSet<String>,
+
+    /// Recursive tuple type.
+    ///
+    /// Should be a generic type with two parameters, inner type and an integer
+    /// depth.
+    #[builder(default)]
+    #[serde(with = "token_stream", default)]
+    rec_tuple_type: TokenStream,
 
     /// OCaml module name mapping.
     ///
@@ -937,9 +945,52 @@ impl<'a> Generator<'a> {
         }
     }
 
+    fn is_unit(expr: &Expression) -> bool {
+        matches!(expr, Expression::Base(_, exprs) if exprs.is_empty())
+    }
+
+    /// Checks whether this expression is a recursive tuple.
+    ///
+    /// Recursive tuples like `(A, (A, (A, ..., () ...)))` are widely used in
+    /// OCaml code, and are hard to handle in Rust if represented literaly.
+    /// Instead, they can be represented as e.g. fixed length arrays.
+    ///
+    /// This function detects if this is such a recursive tuple, and returns
+    /// base type `A` and the recursion depth.
+    fn is_recursive_tuple(exprs: &'a [Expression]) -> Option<(&'a Expression, usize)> {
+        match Self::is_recursive_tuple_(exprs) {
+            Some((expr, depth)) if depth > 1 => Some((expr, depth)),
+            _ => None,
+        }
+    }
+    fn is_recursive_tuple_(exprs: &'a [Expression]) -> Option<(&'a Expression, usize)> {
+        match exprs {
+            [l, r] if Self::is_unit(r) => {
+                Some((l, 1))
+            }
+            [l, Expression::Tuple(s)] => Self::is_recursive_tuple_(s).and_then(|(a, d)| {
+                if l == a {
+                    Some((a, d + 1))
+                } else {
+                    None
+                }
+            }),
+            _ => None,
+        }
+    }
+
     fn tuple(&mut self, ctx: Context<'a>, exprs: &'a [Expression]) -> (TokenStream, usize) {
         let preamble = self.config.type_preamble.clone();
-        let (exprs, sizes): (Vec<_>, Vec<_>) = exprs
+        if !self.config.rec_tuple_type.is_empty() {
+            let rec_tuple_type = self.config.rec_tuple_type.clone();
+            if let Some((expr, depth)) = Self::is_recursive_tuple(exprs) {
+                let (expr, size) = self.generate_type(ctx.derive("0"), expr);
+                let size = size * depth;
+                let depth = Literal::usize_unsuffixed(depth);
+                return (quote!(#rec_tuple_type<#expr, #depth>), size);
+            }
+        }
+        let (exprs_, sizes): (Vec<_>, Vec<_>) = exprs
             .iter()
             .enumerate()
             .map(|(i, expr)| self.generate_type(ctx.derive(&i.to_string()), expr))
@@ -951,14 +1002,14 @@ impl<'a> Generator<'a> {
             // we should generate the type corresponding to this name
             let type_def = quote! {
                 #preamble
-                pub struct #name (#(pub #exprs,)*);
+                pub struct #name (#(pub #exprs_,)*);
             };
             self.register_type(&ctx, name, type_def, size)
         } else {
-            // just reference the tuple
             (
                 quote! {
-                    (#(#exprs,)*)
+
+                    (#(#exprs_,)*)
                 },
                 size,
             )

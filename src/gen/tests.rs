@@ -462,6 +462,34 @@ pub struct Item(pub bool);
 "#;
         assert_eq!(&rs, rust);
     }
+
+    #[test]
+    fn rec_tuple() {
+        let unit = base!("unit");
+        let inner = top_app!(1, base!("int"));
+        let rec_tuple = tuple!(inner, unit);
+        let rec_tuple1 = tuple!(inner, tuple!(inner, tuple!(inner, tuple!(inner, unit))));
+
+        let ty = top_app!(2, record!(foo: rec_tuple, bar: rec_tuple1));
+
+        let bindings = bindings!(rec_tuple, ty);
+        let xref = XRef::new(&bindings).unwrap();
+        let ts = Generator::new(
+            &xref,
+            ConfigBuilder::default()
+                .rec_tuple_type("RecTuple".parse().unwrap())
+                .build()
+                .unwrap(),
+        )
+        .generate("ty");
+        let rs = RustFmt::default().format_tokens(ts.into()).unwrap();
+        let rust = r#"pub struct Ty {
+    pub foo: (i32, ()),
+    pub bar: RecTuple<i32, 4>,
+}
+"#;
+        assert_eq!(&rs, rust);
+    }
 }
 
 mod size {
