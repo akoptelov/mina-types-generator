@@ -28,7 +28,7 @@ mod sanitize {
     /// Possibly qualified type names
     #[test]
     fn type_names() {
-        let mapper = NameMapper::new([]);
+        let mapper = NameMapper::new([], []);
         let types = [
             ("Module.Type.Latest", "ModuleTypeLatest"),
             ("Module.Type.MakeStr.Latest", "ModuleTypeMakeStrLatest"),
@@ -39,10 +39,13 @@ mod sanitize {
             assert_eq!(&rust_gen, rust);
         }
 
-        let mapper = NameMapper::new([
-            ("MakeStr".into(), String::new()),
-            ("SomeType".into(), "AnotherType".into()),
-        ]);
+        let mapper = NameMapper::new(
+            [
+                ("MakeStr".into(), String::new()),
+                ("SomeType".into(), "AnotherType".into()),
+            ],
+            [],
+        );
         let types = [
             ("Module.Type.Latest", "ModuleTypeLatest"),
             ("Module.Type.MakeStr.Latest", "ModuleTypeLatest"),
@@ -198,6 +201,47 @@ mod type_ref_complex {
 
         let rs = gen_ref(&tuple, &bindings!(record, ty));
         assert_eq!(&rs, "(Ty , Ty ,)");
+
+        let rs = gen_ref(&tuple, &bindings!(record, ty, tuple));
+        assert_eq!(&rs, "Tuple");
+    }
+}
+
+mod type_ref_complex_ref_mapping {
+    use crate::{
+        gen::{ConfigBuilder, Generator},
+        shape::Expression,
+        xref::{NamedShape, XRef},
+    };
+
+    fn gen_ref<'a, I: IntoIterator<Item = &'a T>, T: 'a + NamedShape>(
+        expr: &Expression,
+        bindings: I,
+    ) -> String {
+        let xref = XRef::new(bindings).unwrap();
+        Generator::new(
+            &xref,
+            ConfigBuilder::default()
+                .rust_ref_mapping([("ty".into(), "TyTyTy".into())].into())
+                .build()
+                .unwrap(),
+        )
+        .generate_type(Default::default(), expr)
+        .0
+        .to_string()
+    }
+
+    #[test]
+    fn tuple() {
+        let ty = top_app!(1, base!("int"));
+        let tuple = top_app!(3, tuple!(ty, ty));
+        let record = top_app!(2, record!(foo: tuple, bar: tuple));
+
+        let rs = gen_ref(&tuple, &bindings!(record));
+        assert_eq!(&rs, "(i32 , i32 ,)");
+
+        let rs = gen_ref(&tuple, &bindings!(record, ty));
+        assert_eq!(&rs, "(TyTyTy , TyTyTy ,)");
 
         let rs = gen_ref(&tuple, &bindings!(record, ty, tuple));
         assert_eq!(&rs, "Tuple");

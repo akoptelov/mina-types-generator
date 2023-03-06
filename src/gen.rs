@@ -148,10 +148,22 @@ pub struct Config {
     #[serde(default)]
     skip: HashSet<String>,
 
-    /// Name components mapping.
+    /// OCaml module name mapping.
+    ///
+    /// Can be used to e.g. completely remove some module from hierarchy, like
+    /// `Make_str`.
     #[builder(default)]
     #[serde(default)]
-    names_mapping: BTreeMap<String, String>,
+    ocaml_mod_mapping: BTreeMap<String, String>,
+
+    /// Reference mapping.
+    ///
+    /// If manual type built over a generated type should be used, a pair of
+    /// (original OCaml name, manual Rust name) should be included into this
+    /// mapping.
+    #[builder(default)]
+    #[serde(default)]
+    rust_ref_mapping: BTreeMap<String, String>,
 }
 
 mod token_stream {
@@ -317,17 +329,32 @@ impl<'a> Default for Context<'a> {
 
 #[derive(Debug)]
 struct NameMapper {
-    mapping: BTreeMap<String, String>,
+    /// OCaml module name mapping.
+    ocaml_mod_mapping: BTreeMap<String, String>,
+    ///
+    /// Rust reference mapping.
+    rust_ref_mapping: BTreeMap<String, String>,
 }
 
 impl NameMapper {
-    fn new(mapping: impl Into<BTreeMap<String, String>>) -> Self {
+    fn new<M1: Into<BTreeMap<String, String>>, M2: Into<BTreeMap<String, String>>>(
+        ocaml_mod_mapping: M1,
+        rust_ref_mapping: M2,
+    ) -> Self {
         NameMapper {
-            mapping: mapping.into(),
+            ocaml_mod_mapping: ocaml_mod_mapping.into(),
+            rust_ref_mapping: rust_ref_mapping.into(),
         }
     }
-    fn map<'a>(&'a self, name: &'a str) -> &'a str {
-        self.mapping.get(name).map_or(name, String::as_str)
+
+    fn map_ocaml_mod<'a>(&'a self, name: &'a str) -> &'a str {
+        self.ocaml_mod_mapping
+            .get(name)
+            .map_or(name, String::as_str)
+    }
+
+    fn map_rust_ref<'a>(&'a self, name: &'a str) -> Option<&'a str> {
+        self.rust_ref_mapping.get(name).map(String::as_str)
     }
 }
 
@@ -386,18 +413,33 @@ impl<'a> Context<'a> {
 
     fn sanitize_name(name: &str, mapper: &NameMapper) -> String {
         name.split('.')
-            .map(|comp| mapper.map(comp))
+            .map(|comp| mapper.map_ocaml_mod(comp))
             .map(Generator::name_for_type)
             .collect::<Vec<_>>()
             .join("")
     }
 
-    fn ident(&self, mapper: &NameMapper) -> TokenStream {
-        format_ident!("{name}", name = Self::sanitize_name(&self.name, mapper)).to_token_stream()
+    /// Type name for the context.
+    ///
+    /// Name is generated from OCaml name using OCaml module mapping.
+    fn type_name(&self, mapper: &NameMapper) -> TokenStream {
+        let name = Self::sanitize_name(&self.name, mapper);
+        format_ident!("{name}").to_token_stream()
+    }
+
+    /// Reference to the type defined by the context.
+    ///
+    /// Name is eigher taken from Rust reference mapping or generated from OCaml
+    /// name using OCaml module mapping.
+    fn type_ref(&self, mapper: &NameMapper) -> TokenStream {
+        let name = mapper
+            .map_rust_ref(&self.name)
+            .map_or_else(|| Self::sanitize_name(&self.name, mapper), String::from);
+        format_ident!("{name}").to_token_stream()
     }
 
     fn mandatory_name_matches(&self, type_ref: &TokenStream, mapper: &NameMapper) -> bool {
-        !self.is_mandatory || self.ident(mapper).to_string() == type_ref.to_string()
+        !self.is_mandatory || self.type_ref(mapper).to_string() == type_ref.to_string()
     }
 }
 
@@ -483,7 +525,10 @@ impl<'a> Generator<'a> {
     pub fn new(xref: &'a XRef<'a>, mut config: Config) -> Self {
         Self {
             xref,
-            name_conv: NameMapper::new(mem::take(&mut config.names_mapping)),
+            name_conv: NameMapper::new(
+                mem::take(&mut config.ocaml_mod_mapping),
+                mem::take(&mut config.rust_ref_mapping),
+            ),
             config,
             name_mapping: BTreeMap::new(),
             requested_types: Vec::new(),
@@ -621,7 +666,7 @@ impl<'a> Generator<'a> {
     }
 
     fn register_skipped_type(&self, ctx: &Context<'a>) -> (TokenStream, usize) {
-        (ctx.ident(&self.name_conv), 1)
+        (ctx.type_ref(&self.name_conv), 1)
     }
 
     pub fn generate_type(
@@ -705,7 +750,7 @@ impl<'a> Generator<'a> {
         ctx: Context<'a>,
         fields: &'a [(String, Expression)],
     ) -> (TokenStream, usize) {
-        let name = ctx.ident(&self.name_conv);
+        let name = ctx.type_name(&self.name_conv);
         let preamble = self.config.type_preamble.clone();
         let phantom_fields = self.get_unused_params(fields.iter().map(|(_, expr)| expr));
         let phantom_fields = phantom_fields
@@ -727,7 +772,7 @@ impl<'a> Generator<'a> {
                 #(#fields,)*
             }
         };
-        self.register_type(&ctx, ctx.ident(&self.name_conv), type_def, size)
+        self.register_type(&ctx, ctx.type_ref(&self.name_conv), type_def, size)
     }
 
     fn get_unused_params<I: Clone + IntoIterator<Item = &'a Expression>>(
@@ -804,7 +849,7 @@ impl<'a> Generator<'a> {
         ctx: Context<'a>,
         alts: &'a [(String, Vec<Expression>)],
     ) -> (TokenStream, usize) {
-        let name = ctx.ident(&self.name_conv);
+        let name = ctx.type_name(&self.name_conv);
         let preamble = self.config.type_preamble.clone();
         let (alt_types, sizes): (Vec<_>, Vec<_>) = alts
             .iter()
@@ -902,7 +947,7 @@ impl<'a> Generator<'a> {
         let size = sizes.into_iter().sum();
 
         if ctx.is_mandatory() {
-            let name = ctx.ident(&self.name_conv);
+            let name = ctx.type_name(&self.name_conv);
             // we should generate the type corresponding to this name
             let type_def = quote! {
                 #preamble
@@ -926,7 +971,7 @@ impl<'a> Generator<'a> {
         _loc: &Location,
         constrs: &'a [PolyConstr],
     ) -> (TokenStream, usize) {
-        let name = ctx.ident(&self.name_conv);
+        let name = ctx.type_name(&self.name_conv);
         let preamble = self.config.type_preamble.clone();
         let poly_preamble = self.config.poly_var_preamble.clone();
         let (constrs, sizes): (Vec<_>, Vec<_>) = constrs
@@ -1012,7 +1057,7 @@ impl<'a> Generator<'a> {
         if iter::zip(*vids, args)
             .any(|(vid, arg)| matches!(arg, Expression::Var((_, v)) if v == vid))
         {
-            let name = ctx.ident(&self.name_conv);
+            let name = ctx.type_ref(&self.name_conv);
             (
                 quote! {
                     Box<#name>
@@ -1075,7 +1120,7 @@ impl<'a> Generator<'a> {
             if self
                 .config
                 .skip
-                .contains(&ctx.ident(&self.name_conv).to_string())
+                .contains(&ctx.type_name(&self.name_conv).to_string())
             {
                 return self.register_skipped_type(&ctx);
             }
@@ -1090,7 +1135,7 @@ impl<'a> Generator<'a> {
                 return (type_ref, size);
             }
 
-            let name = ctx.ident(&self.name_conv);
+            let name = ctx.type_name(&self.name_conv);
             let type_def = if self.config.use_type_alias {
                 quote! {
                     pub type #name = #type_ref;
@@ -1102,7 +1147,7 @@ impl<'a> Generator<'a> {
                     pub struct #name(pub #type_ref);
                 }
             };
-            self.register_type(&ctx, name, type_def, size)
+            self.register_type(&ctx, ctx.type_ref(&self.name_conv), type_def, size)
         }
     }
 
