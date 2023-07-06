@@ -102,7 +102,7 @@ pub struct Config {
 
     /// Git repository prefix
     #[builder(setter(into, strip_option), default)]
-    git_prefix: Option<String>,
+    pub git_prefix: Option<String>,
 
     /// Rust file preamble.
     #[builder(default)]

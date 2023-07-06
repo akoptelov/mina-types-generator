@@ -39,6 +39,10 @@ struct Gen {
     #[clap(short, long)]
     all: bool,
 
+    /// source git revision
+    #[clap(short, long)]
+    git_commit: Option<String>,
+
     #[clap(value_parser)]
     types: Vec<String>,
 }
@@ -249,7 +253,7 @@ impl Gen {
         let git_base =
             "https://github.com/MinaProtocol/mina/blob/b14f0da9ebae87acd8764388ab4681ca10f07c89/";
 
-        let config = if let Some(config) = self.config {
+        let mut config = if let Some(config) = self.config {
             let mut buf = Vec::new();
             File::open(config)?.read_to_end(&mut buf)?;
             toml::from_slice(&buf)?
@@ -260,6 +264,10 @@ impl Gen {
                 .git_prefix(git_base)
                 .build()?
         };
+        if let Some(git_prefix) = config.git_prefix.as_mut() {
+            git_prefix.push_str(&self.git_commit.unwrap_or(String::from("unknown")));
+            git_prefix.push('/');
+        }
         let mut gen = bin_prot_rs::gen::Generator::new(&xref, config);
         let ts = if self.all {
             gen.generate_types(xref.names())
