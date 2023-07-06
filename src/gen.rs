@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     iter, mem,
 };
 
@@ -90,6 +90,38 @@ impl<'a> From<Error<'a>> for (TokenStream, usize) {
     }
 }
 
+#[derive(Debug, Clone, Default, derive_more::From)]
+pub struct SerdeTokenStream(pub TokenStream);
+
+mod tokens {
+    use serde::{Deserialize, Serialize};
+
+    use super::SerdeTokenStream;
+
+    impl Serialize for SerdeTokenStream {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: serde::Serializer,
+        {
+            let serialized = self.0.to_string();
+            serialized.serialize(serializer)
+        }
+    }
+
+    impl<'de> Deserialize<'de> for SerdeTokenStream {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: serde::Deserializer<'de>,
+        {
+            let deserialized = String::deserialize(deserializer)?;
+            let parsed = deserialized
+                .parse()
+                .map_err(|e| serde::de::Error::custom(format!("Error parsing tokens: {e}")))?;
+            Ok(Self(parsed))
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Builder)]
 pub struct Config {
     /// Generate comments.
@@ -111,8 +143,13 @@ pub struct Config {
 
     /// Type preamble, like attributes.
     #[builder(default)]
-    #[serde(with = "token_stream", default)]
-    type_preamble: TokenStream,
+    #[serde(default)]
+    type_preamble: SerdeTokenStream,
+
+    /// Rust file preambles for specific types.
+    #[builder(default)]
+    #[serde(default)]
+    type_preambles: HashMap<String, SerdeTokenStream>,
 
     /// Polymorphic variant preamble.
     #[builder(default)]
@@ -445,9 +482,7 @@ impl<'a> Context<'a> {
     }
 
     fn arg_refs(&self) -> &str {
-        self.top_apps
-            .first()
-            .map_or("", |ta| &ta.arg_refs)
+        self.top_apps.first().map_or("", |ta| &ta.arg_refs)
     }
 
     fn derive(&self, suffix: &str) -> Self {
@@ -793,7 +828,7 @@ impl<'a> Generator<'a> {
         fields: &'a [(String, Expression)],
     ) -> (TokenStream, usize) {
         let name = ctx.type_name(&self.name_conv);
-        let preamble = self.config.type_preamble.clone();
+        let preamble = self.type_preamble(&ctx.name);
         let phantom_fields = self.get_unused_params(fields.iter().map(|(_, expr)| expr));
         let phantom_fields = phantom_fields
             .iter()
@@ -892,7 +927,7 @@ impl<'a> Generator<'a> {
         alts: &'a [(String, Vec<Expression>)],
     ) -> (TokenStream, usize) {
         let name = ctx.type_name(&self.name_conv);
-        let preamble = self.config.type_preamble.clone();
+        let preamble = self.type_preamble(&ctx.name);
         let (alt_types, sizes): (Vec<_>, Vec<_>) = alts
             .iter()
             .map(|(alt, exprs)| {
@@ -1016,7 +1051,7 @@ impl<'a> Generator<'a> {
     }
 
     fn tuple(&mut self, ctx: Context<'a>, exprs: &'a [Expression]) -> (TokenStream, usize) {
-        let preamble = self.config.type_preamble.clone();
+        let preamble = self.type_preamble(&ctx.name);
         if !self.config.rec_tuple_type.is_empty() {
             let rec_tuple_type = self.config.rec_tuple_type.clone();
             if let Some((expr, depth)) = Self::is_recursive_tuple(exprs) {
@@ -1059,7 +1094,7 @@ impl<'a> Generator<'a> {
         constrs: &'a [PolyConstr],
     ) -> (TokenStream, usize) {
         let name = ctx.type_name(&self.name_conv);
-        let preamble = self.config.type_preamble.clone();
+        let preamble = self.type_preamble(&ctx.name);
         let poly_preamble = self.config.poly_var_preamble.clone();
         let (constrs, sizes): (Vec<_>, Vec<_>) = constrs
             .iter()
@@ -1228,14 +1263,24 @@ impl<'a> Generator<'a> {
                     pub type #name = #type_ref;
                 }
             } else {
-                let preamble = &self.config.type_preamble;
+                let preamble = self.type_preamble(&ctx.name);
                 quote! {
                     #preamble
+                    #[derive(Deref)]
                     pub struct #name(pub #type_ref);
                 }
             };
             self.register_type(&ctx, ctx.type_ref(&self.name_conv), type_def, size)
         }
+    }
+
+    fn type_preamble(&self, name: &String) -> TokenStream {
+        self.config
+            .type_preambles
+            .get(name)
+            .unwrap_or(&self.config.type_preamble)
+            .0
+            .clone()
     }
 
     fn global_name(&self, gid: &'a Gid) -> Option<&'a str> {
