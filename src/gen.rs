@@ -1068,10 +1068,11 @@ impl<'a> Generator<'a> {
         let min_size = sizes.iter().min().cloned().unwrap_or_default();
         let (constrs, sizes): (Vec<_>, Vec<_>) = iter::zip(constrs, sizes)
             .map(|((name, constr), size)| {
-                let name = Self::type_ident(name);
+                let name = Self::poly_variant_ident(name);
                 if constr.is_none() {
                     (
                         quote! {
+                            #[allow(non_camel_case_types)]
                             #name
                         },
                         0,
@@ -1079,6 +1080,7 @@ impl<'a> Generator<'a> {
                 } else if self.should_box_alt(size, min_size) {
                     (
                         quote! {
+                            #[allow(non_camel_case_types)]
                             #name(Box<#constr>)
                         },
                         1,
@@ -1086,6 +1088,7 @@ impl<'a> Generator<'a> {
                 } else {
                     (
                         quote! {
+                            #[allow(non_camel_case_types)]
                             #name(#constr)
                         },
                         size,
@@ -1296,9 +1299,21 @@ impl<'a> Generator<'a> {
             .collect::<String>()
     }
 
+    fn name_for_type_no_conv(name: &str) -> String {
+        name.chars()
+            .filter(|ch| *ch == '_' || ch.is_alphanumeric())
+            .collect::<String>()
+    }
+
     /// Sanitizes OCaml ident as a Rust type name.
     fn type_ident(name: &str) -> TokenStream {
         let ident = Generator::name_for_type(name);
+        format_ident!("{ident}").to_token_stream()
+    }
+
+    /// Sanitizes OCaml ident as a Rust type name.
+    fn poly_variant_ident(name: &str) -> TokenStream {
+        let ident = Generator::name_for_type_no_conv(name);
         format_ident!("{ident}").to_token_stream()
     }
 
