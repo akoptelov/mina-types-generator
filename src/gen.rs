@@ -151,6 +151,11 @@ pub struct Config {
     #[serde(default)]
     type_preambles: HashMap<String, SerdeTokenStream>,
 
+    /// Newtype struct preamble.
+    #[builder(default)]
+    #[serde(default)]
+    newtype_preamble: SerdeTokenStream,
+
     /// Polymorphic variant preamble.
     #[builder(default)]
     #[serde(with = "token_stream", default)]
@@ -1264,9 +1269,10 @@ impl<'a> Generator<'a> {
                 }
             } else {
                 let preamble = self.type_preamble(&ctx.name);
+                let newtype_preamble = &self.config.newtype_preamble.0;
                 quote! {
                     #preamble
-                    #[derive(Deref)]
+                    #newtype_preamble
                     pub struct #name(pub #type_ref);
                 }
             };
