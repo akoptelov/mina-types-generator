@@ -264,10 +264,49 @@ mod token_stream_opt {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct TypeId<'a> {
-    gid: &'a Gid,
+    gid_or_name: GidOrName<'a>,
     arg_refs: String,
+}
+
+impl<'a> std::fmt::Display for TypeId<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match &self.gid_or_name {
+            GidOrName::Gid(gid) => write!(f, "Gid({gid})"),
+            GidOrName::Name(name) => write!(f, "{name}"),
+        }?;
+        write!(f, "<{}>", self.arg_refs)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, derive_more::From)]
+enum GidOrName<'a> {
+    Gid(&'a Gid),
+    Name(String),
+}
+
+impl<'a> TypeId<'a> {
+    fn for_gid(gid: &'a Gid) -> Self {
+        TypeId {
+            gid_or_name: gid.into(),
+            arg_refs: String::new(),
+        }
+    }
+
+    fn for_gid_with_args(gid: &'a Gid, arg_refs: String) -> Self {
+        TypeId {
+            gid_or_name: gid.into(),
+            arg_refs,
+        }
+    }
+
+    fn for_name(name: impl Into<String>, arg_refs: String) -> Self {
+        TypeId {
+            gid_or_name: name.into().into(),
+            arg_refs,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -408,7 +447,7 @@ impl<'a> Context<'a> {
     fn arg_refs(&self) -> &str {
         self.top_apps
             .first()
-            .map_or_else(|| panic!("no arg_refs"), |ta| &ta.arg_refs)
+            .map_or("", |ta| &ta.arg_refs)
     }
 
     fn derive(&self, suffix: &str) -> Self {
@@ -630,10 +669,7 @@ impl<'a> Generator<'a> {
     fn generate_for_name(&mut self, name: &str) -> Result<TokenStream> {
         match self.xref.expr_for_name(name) {
             Some(expr @ Expression::Top_app(Group { gid, .. }, _, _args)) => {
-                self.requested_types.push(TypeId {
-                    gid,
-                    arg_refs: String::new(),
-                });
+                self.requested_types.push(TypeId::for_gid(gid));
                 Ok(self.generate_type(Context::default(), expr).0)
             }
             Some(expr) => Err(Error::Assert(format!(
@@ -657,18 +693,16 @@ impl<'a> Generator<'a> {
         type_def: TokenStream,
         size: usize,
     ) -> (TokenStream, usize) {
-        if let Some(gid) = ctx.gid() {
-            let type_id = TypeId {
-                gid,
-                arg_refs: ctx.arg_refs().to_string(),
-            };
-            let type_desc = GeneratedType::new(ctx, type_ref.clone(), type_def, size);
-            if let Some(prev) = self.name_mapping.insert(type_id, type_desc) {
-                gen_error!(
-                    "duplicate type registered for {gid} as {type_ref}, already registered as {prev}",
-                    prev = prev.type_ref,
-                );
-            }
+        let type_id = ctx.gid().map_or_else(
+            || TypeId::for_name(ctx.name(), ctx.arg_refs().to_string()),
+            |gid| TypeId::for_gid_with_args(gid, ctx.arg_refs().to_string()),
+        );
+        let type_desc = GeneratedType::new(ctx, type_ref.clone(), type_def, size);
+        if let Some(prev) = self.name_mapping.insert(type_id.clone(), type_desc) {
+            gen_error!(
+                "duplicate type registered for {type_id} as {type_ref}, already registered as {prev}",
+                prev = prev.type_ref,
+            );
         }
         (type_ref, size)
     }
@@ -965,16 +999,18 @@ impl<'a> Generator<'a> {
     }
     fn is_recursive_tuple_(exprs: &'a [Expression]) -> Option<(&'a Expression, usize)> {
         match exprs {
-            [l, r] if Self::is_unit(r) => {
-                Some((l, 1))
+            [l, r] if Self::is_unit(r) => Some((l, 1)),
+            [l, Expression::Tuple(s)] => {
+                Self::is_recursive_tuple_(s).and_then(
+                    |(a, d)| {
+                        if l == a {
+                            Some((a, d + 1))
+                        } else {
+                            None
+                        }
+                    },
+                )
             }
-            [l, Expression::Tuple(s)] => Self::is_recursive_tuple_(s).and_then(|(a, d)| {
-                if l == a {
-                    Some((a, d + 1))
-                } else {
-                    None
-                }
-            }),
             _ => None,
         }
     }
@@ -1154,10 +1190,7 @@ impl<'a> Generator<'a> {
         } else {
             let arg_refs = self.substitute_args(&ctx, vids, args);
             let arg_refs_str = Self::stringify_arg_refs(arg_refs.iter().map(|(ar, _)| ar));
-            let type_id = TypeId {
-                gid,
-                arg_refs: arg_refs_str.clone(),
-            };
+            let type_id = TypeId::for_gid_with_args(gid, arg_refs_str.clone());
             if let Some(gen_type) = self.name_mapping.get(&type_id) {
                 return (gen_type.type_ref.clone(), gen_type.size);
             }
